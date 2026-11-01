@@ -265,6 +265,12 @@ mod tests {
     }
 
     #[test]
+    fn hashes_match_inngest() {
+        // The hash inngest/inngest stores for this concurrency key.
+        assert_eq!(hash36("event.data.import.id"), "uk4ojznjfqxo");
+    }
+
+    #[test]
     fn urls() {
         assert_eq!(
             normalize_url("http://127.0.0.1:80/api/inngest?stepId=step&fnId=a&deployId=x"),

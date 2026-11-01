@@ -1,0 +1,1266 @@
+event.data.n + 1
+event.data.n - 1
+event.data.n * 2
+event.data.f + 0.5
+event.data.s + event.data.nul
+event.data.nul + event.data.s
+event.data.s + event.data.list
+event.data.s + event.data.obj
+event.data.s + event.data.big
+event.ts
+event.data.big
+event.data.nul
+event.data.missing
+event.data.items.exists(x, x.name == "a")
+event.data.items.exists(x, x.name == "c")
+event.data.items.all(x, x.name != "")
+event.data.items.map(x, x.name)
+event.data.items[5]
+event.data.items[5] == null
+event.data.items[0].nope
+event.data.items[0].nope == null
+event.data.s.x
+event.data.list.x
+event.data.n == 5
+event.data.n == 5u
+1 == 1.0
+event.data.missing + 1
+1 + event.data.missing
+event.data.items[9] + "x"
+"x" + event.data.items[9]
+event.data.tags.exists(t, t)
+!event.data.tags.exists(t, t == "z")
+size(event.data.nul)
+size(event.data.s)
+"a" < 1
+event.data.nul < [1]
+null == null
+event.data.nul == event.data.missing
+event.data.missing == event.data.missing2
+-event.data.missing
+!event.data.s
+!null
+lowercase(5)
+lowercase(event.data.missing)
+int("12")
+int(event.data.f)
+string(event.data.f)
+string(event.data.n)
+double(5)
+type(event.data.n)
+type(event.data.n) == double
+timestamp("2020-01-01T00:00:00Z")
+duration("1h30m")
+date("2020-01-01")
+date(event.ts)
+date(1774512121)
+{"a": event.data.missing}
+[event.data.missing]
+[1, event.data.missing].size()
+event.data.missing in [1]
+1 in event.data.list
+"k" in event.data.obj
+"a" in event.data.obj
+event.data.t ? 1 : 2
+event.data.s ? "y" : "n"
+json_parse('[1]')
+b64decode("aGk=")
+b64decode("%%%")
+event.data.s.matches("[")
+"abc".matches("^a")
+matches("abc", "c$")
+event.data.n / 0
+5 / 0
+5 % 0
+event.data.f > event.data.n
+has(event.data.items)
+has(event.data.nul.x)
+has(event.data.s.x)
+has(event.data.list.x)
+has(event.data.missing.x.y)
+event.data.obj.b == 2
+event.data.items.map(x, x.missing)
+event.data.items.filter(x, x.missing)
+event.data.items.exists(x, x.missing)
+event.data.items.all(x, x.missing)
+event.data.items.exists_one(x, x.name == "a")
+event.data.items.size()
+size(event.data.obj)
+bytes("abc")
+duration("1h") + duration("30m")
+timestamp("2020-01-01T00:00:00Z") + duration("1h")
+timestamp("2020-01-01T00:00:00Z").getHours()
+timestamp("2020-01-01T00:00:00Z").getDayOfWeek("America/New_York")
+1u
+-5
+event.data.n % 2
+5 % 2
+3.0 / 2
+9223372036854775807 + 1
+uint(event.data.n)
+event.data.big + ""
+event.data.f + ""
+1e21 + ""
+0.00001 + ""
+"" + 100000.0
+"" + 123456.0
+"" + 1e6
+event.data.t + ""
+"" + duration("90m")
+"" + timestamp("2020-01-01T00:00:00Z")
+"" + [1, "a", null]
+"" + event.data.list
+event.data.s.startsWith("h")
+event.data.s.contains(event.data.missing)
+event.data.missing.contains("x")
+event.data.n.contains("x")
+event.data.n > "a"
+event.data.missing > event.data.missing2
+null > null
+event["data"].missing
+event["data"]["missing"]
+event.data["missing"]
+event.data["missing"].x
+event.data.items[0].name
+event.data.obj.missing
+size(event.data.obj) + (event.data.obj.zz == 1 ? 1 : 0)
+event.data.obj
+event.data.obj == null || event.data.obj.zz == 1
+event
+event.data.missing.contains("x")
+async.data.x
+async
+async == null
+async.data.x == null
+event.data.s + 5
+5 + event.data.s
+lowercase(event.data.s)
+event.data.items.map(x, x.name + "!")
+[1,2,3].map(x, x * 2)
+[1,2,3].filter(x, x > 1)
+[1,2,3].exists_one(x, x > 2)
+event.data.n in [5, 6]
+event.data.n in {"5": 1}
+"5" in {"5": 1}
+1 in {1: "a"}
+{1: "a"}[1]
+{1: "a"}[1.0]
+{1: "a"}[1u]
+[1,2][1.0]
+[1,2][1u]
+[1,2][1.5]
+[1,2]["a"]
+[1,2][-1]
+"abc"[0]
+event.data.s[0]
+event.data.obj[1]
+null.x
+has({"a": 1}.a)
+has({"a": 1}.b)
+has(event.data)
+has(event)
+has(async.x)
+has(event.data.items[0].name)
+has(event.data.items[9].name)
+1 + 2 * 3 - 4 / 2 % 3
+[1] + [2]
+{"a": 1} == {"a": 1.0}
+[1, 2] == [1.0, 2u]
+duration("1h") > duration("30m")
+timestamp("2020-01-01T00:00:00Z") < now()
+now() - timestamp("2020-01-01T00:00:00Z") > duration("1h")
+timestamp("2020-01-01T00:00:00Z") - timestamp("2019-12-31T00:00:00Z")
+int(timestamp("2020-01-01T00:00:00Z"))
+string(timestamp("2020-01-01T00:00:00.5Z"))
+string(duration("90m"))
+string(true)
+bool("true")
+bool("t")
+bool("yes")
+int("abc")
+int(1e20)
+uint(-1)
+double("1.5")
+double("abc")
+dyn(1) == 1
+type(1) == int
+type("a") == string
+type(null) == null_type
+type([]) == list
+type({}) == map
+type(type(1)) == type
+type(1u)
+type(duration("1s"))
+type(timestamp("2020-01-01T00:00:00Z"))
+timestamp("2020-01-01T00:00:00Z").getFullYear()
+timestamp("2020-03-01T00:00:00Z").getMonth()
+timestamp("2020-03-01T00:00:00Z").getDayOfYear()
+timestamp("2020-03-05T00:00:00Z").getDayOfMonth()
+timestamp("2020-03-05T00:00:00Z").getDate()
+timestamp("2020-03-05T10:20:30.456Z").getMilliseconds()
+timestamp("2020-03-05T10:20:30.456Z").getHours("+05:30")
+timestamp("2020-03-05T10:20:30.456Z").getMinutes("-05:30")
+timestamp("2020-03-05T10:20:30.456Z").getHours("Asia/Tokyo")
+timestamp("2020-03-05T10:20:30.456Z").getHours("Nope/Zone")
+duration("90m").getHours()
+duration("90m").getMinutes()
+duration("90m").getSeconds()
+duration("1.5s").getMilliseconds()
+"hello".size()
+size("héllo")
+size([1,2])
+size({"a":1})
+"abc".contains("")
+"abc".endsWith("bc")
+event.data.s.endsWith(event.data.nul)
+true > false
+1u < 2
+-1 < 1u
+1.5 > 1
+event.data.f == 1.5
+event.data.t == true
+!event.data.t
+!!event.data.t
+-event.data.f
+-(-5)
+- -5
+---5
+-9223372036854775808
+9223372036854775807 * 2
+-9223372036854775808 / -1
+-9223372036854775808 % -1
+5u - 6u
+10 / 3
+-10 / 3
+-10 % 3
+10.0 / 4.0
+1.0 / 0.0
+0.0 / 0.0 == 0.0 / 0.0
+"" || false
+false || ""
+0 && true
+true && 0
+event.data.missing || event.data.missing2
+event.data.items[9] || false
+false || event.data.items[9]
+event.data.items[9] && true
+now_plus("1h") > now_minus("1h")
+now_plus("bad")
+now_plus(5)
+date("bad")
+date(5)
+date("2020-01-01T00:00:00+05:00")
+date(1774512121538)
+date(event.data.missing)
+json_parse(event.data.s)
+b64decode(event.data.missing) == ""
+"x" + 1
+1 + "x"
+1 + 1u
+1u + 1
+1.5 + 1
+true + 1
+[1] + 1
+{"a": 1} + "x"
+timestamp("2020-01-01T00:00:00Z") + "x"
+event.data.list + [1]
+event.data.n == event.data.n
+event.data.list == event.data.list
+event.data.list[3].k
+event.data.list[2]
+event.data.list[2] == null
+event.data.list[2].x
+event.data.items.exists(i, i.name == event.data.s)
+event.data.items.all(i, has(i.name))
+event.data.items.exists(i, i.missing == null)
+event.data.tags.map(t, t + "!")
+event.data.tags.filter(t, t != "x")
+event.data.missing.map(k, k)
+event.data.nul.map(k, k)
+event.data.s.map(k, k)
+[1, 2].map(x, x > 1, x * 10)
+[[1], [2]].map(x, x[0])
+size(event.data.missing) == 0
+size(event.data.list)
+event.data.list.size()
+event.data.missing.size()
+event.data.userId == async.data.userId
+event.data.amount > 100 && event.data.plan == 'pro'
+event.data.amount > 100 && event.data.plan == 'free'
+async.data.billing_plan == 'enterprise'
+async.data.billing_plan != 'enterprise'
+event.data.n == async.data.n
+event.name == "app/user.created" && event.data.user.active == true
+event.data.user.email.endsWith("@example.com")
+event.data.user.email.contains("example")
+event.data.user.name.startsWith("al")
+event.data.user.name.matches("^a.*e$")
+matches(event.data.user.name, "^b")
+event.data.user.role in ["admin", "owner"]
+event.data.user.role in ["owner"]
+"admin" in event.data.tags
+"x" in event.data.tags
+event.data.nums.all(n, n > 0)
+event.data.nums.exists(n, n == 2)
+event.data.nums.exists_one(n, n > 1)
+event.data.nums.map(n, n * 2)
+event.data.nums.map(n, n + 1)
+event.data.nums.filter(n, n % 2 == 1)
+event.data.nums.filter(n, n > 1).size()
+event.data.items.map(i, i.qty)
+event.data.items.filter(i, i.qty > 0).map(i, i.name)
+event.data.items.exists(i, i.qty > 1 && i.name == "a")
+has(event.data.user)
+has(event.data.user.email)
+has(event.data.user.missing)
+has(event.data.missing)
+!has(event.data.missing)
+has(event.data.missing.deep)
+has(event.data.nul)
+has(event.data.nul.x)
+has(event.data.items)
+has(event.data.items.x)
+!has(event.data.items.x)
+has(async.data.userId)
+has(event.data.emptyobj.x)
+!has(event.data.user) || event.data.user.active == true
+!has(event.data.user) && event.data.user.active == null
+!((has(event.data.a) && event.data.a) || (has(event.data.b) && event.data.b) || (has(event.data.c) && event.data.c))
+event.data.a || event.data.b
+event.data.a && event.data.b
+event.data.c || event.data.a
+event.data.zero || event.data.s
+event.data.fzero || event.data.s
+event.data.empty || "fallback"
+event.data.missing || "fallback"
+event.data.missing || event.data.userId
+event.data.userId || event.data.missing
+event.data.missing && event.data.userId
+event.data.userId && event.data.missing
+null || event.data.s
+uint(5) || false
+uint(0) || event.data.s
+false || event.data.list
+false || event.data.emptylist
+false || event.data.emptyobj
+event.data.f || false
+event.data.t || event.data.missing
+event.data.fl || event.data.missing
+event.data.value ? "truthy" : "falsy"
+event.data.s ? "truthy" : "falsy"
+event.data.empty ? "truthy" : "falsy"
+event.data.zero ? "truthy" : "falsy"
+event.data.nul ? "truthy" : "falsy"
+event.data.emptylist ? "truthy" : "falsy"
+event.data.missing ? event.data.missing : event.data.userId
+event.data.userId ? event.data.userId : event.data.missing
+event.data.missing == "foo"
+event.data.missing == null
+event.data.missing == 0
+event.data.a == event.data.b
+event.data.missing != "foo"
+event.data.missing != null
+event.data.missing != 0
+event.data.missing != ""
+event.data.missing < 5
+event.data.missing <= 5
+5 < event.data.missing
+5 <= event.data.missing
+event.data.n > event.data.missing
+event.data.missing > 5
+event.data.missing >= 5
+5 > event.data.missing
+5 >= event.data.missing
+event.data.s + event.data.missing
+event.data.missing + event.data.s
+event.data.a + event.data.b
+size(event.data.missing)
+size(event.data.missing) > 0
+event.data.missing in ["a", "b", "c"]
+null == "foo"
+"foo" == null
+null != "foo"
+"foo" != null
+null < "foo"
+"foo" < null
+null < uint(5)
+null < 5
+5 < null
+null > 0
+5 > null
+null <= 0
+null >= 1
+null < 0.5
+event.data.f > null
+event.data.n > null
+event.data.f <= null
+event.data.f <= null && event.data.n < null
+event.data.f > null && event.data.n > null
+event.data.n > 3.141 && event.data.f <= 2
+event.data.something == null
+event.data.issue.field.another == 'another'
+event.data.t == true && event.data.issue.field.another != 'another'
+event.first.foo == 'test' && event.second.bar != true
+event.nonexistent.exists(x, x == 'a')
+event.data.tags.exists(x, x == "a")
+event.data.tags.exists(x, x == "x")
+event.data.tags.exists(x, x == "d") == false
+event.data.foo != '' && 'item' in event.data.issue.fields.tags
+event['data'].foo != '' && event['data'].bar != true
+event['data'].s
+event.data.title.matches('^[a-z\\d]{0,10}$')
+event.data.title.matches('\\w')
+event.data.some.unknown.contains(event.data.title)
+'hello'.contains('llo')
+size(event.data.action) > 0
+size(event.data.action) == 6
+int(async.data.status) == 200
+async.data.status == 200
+uppercase(event.data.priority) == 'P1'
+lowercase(event.data.priority) == 'p1'
+date(event.data.from) + duration('6h35m10s') == date('2020-01-01T18:35:10')
+date(event.data.date) > date("2024-01-01")
+date(event.data.date) < now()
+date(event.data.missing) < now()
+now_plus("1h") > now()
+now_minus("1d") < now()
+now_plus("1w") > now_plus("6d")
+now_plus("1.5h") > now_plus("89m")
+b64decode("aGkgdGhlcmUh") + " - b64 data"
+b64decode("aGkgdGhlcmUh") == "hi there!"
+json_parse(b64decode(event.data.encoded)).nested.data
+json_parse(b64decode(event.data.encoded)).nested.data == "yea"
+json_parse(b64decode(event.data.encoded)).nested.missing == "yea"
+event.data == event.data
+event.data.obj == event.data.obj
+event.data.items[0] == event.data.items[1]
+event.data.ingressId || event.data.userId
+event.data.userId + '-' + event.data.s
+event.data.name + '-' + event.data.n + '-' + event.data.t + '-' + event.data.list + '-' + event.data.obj + '-' + event.data.missing
+event.id
+event.name
+event.ts
+event.data
+event.data.user
+event.data.missing
+event.data.nul
+event.data.n
+event.data.f
+event.data.huge
+event.data.neg
+event.data.n * 2.0
+event.data.f * 2.0
+int(event.data.n) * 2
+int(event.data.n) + 1
+double(event.data.n) + 0.5
+event.data.n + 1.0
+event.data.amount > 100
+event.data.amount >= 150u
+event.data.amount == 150
+event.data.amount == 150u
+event.data.amount != 150.0
+event.data.neg < -2
+event.data.neg < 0u
+uint(event.data.neg)
+int(event.data.huge)
+int(event.data.f)
+string(event.data.big)
+string(event.data.huge)
+string(event.data.neg)
+event.data.s + event.data.huge
+"" + 0.000001
+"" + 1e-7
+"" + 123456789.0
+"" + 0.1
+"" + -2.5
+"k-" + event.data.zero
+"k-" + event.data.fzero
+"k-" + event.data.t
+"k-" + event.data.nul
+"k-" + event.data.emptylist
+"k-" + event.data.emptyobj
+"k-" + event.data.items
+"k-" + event.data.user
+event.data.items[0].name
+event.data.items[1].qty == 0
+event.data.items[2].name
+event.data.items[2].name == null
+event.data.items[-1]
+event.data.items["0"]
+event.data.list[0] == 1
+event.data.list[1] == "a"
+event.data.list[3]["k"]
+event.data.obj["a"]
+event.data.obj[event.data.obj.a]
+event.data.obj[event.data.missing]
+event.data[event.data.s]
+event.data["s"] + "!"
+event.data.user["email"]
+async.data["userId"]
+async.data.missing == null
+async.data.missing
+async.missing.x
+async.data.userId == event.data.userId
+event.data.user.name == "alice" && event.data.user.role == "admin" && (event.data.features.a || event.data.features.b)
+event.data.missing < 5 && event.data.s != "" && (event.data.tag || event.data.fallback)
+event.data.n in [1, 5]
+event.data.f in [1.5]
+5 in event.data.nums
+5.0 in event.data.nums
+"2" in event.data.nums
+event.data.s in "hi"
+event.data.s in event.data.obj
+"a" in event.data.obj
+event.data.missing in event.data.obj
+event.data.s in event.data.missing
+[event.data.s, event.data.n]
+[event.data.s, event.data.missing]
+{"k": event.data.s}
+{"k": event.data.missing}
+{event.data.s: 1}
+{1: 2, 1: 3}
+[1, 2, 3][1]
+[1, 2, 3][event.data.n]
+[1, 2, 3][event.data.missing]
+size([1, 2, 3]) == 3
+size(event.data.items) == 2
+event.data.items.size() > 1
+size(event.data.user)
+event.data.tags.size()
+size(event.data.s)
+size(event.data.n)
+event.data.n.size()
+!event.data.t
+!event.data.fl
+!event.data.missing
+!event.data.nul
+!event.data.n
+!(event.data.n > 3)
+-event.data.n
+-event.data.missing
+-event.data.s
+!event.data.value.matches("x")
+!event.data.s.matches("x")
+!event.data.n.matches("x")
+event.data.n.matches("x")
+event.data.s.matches(event.data.missing)
+event.data.s.contains(event.data.n)
+event.data.missing.startsWith("a")
+event.data.s.startsWith(event.data.missing)
+lowercase(event.data.n)
+uppercase(event.data.missing) == ""
+uppercase(event.data.nul)
+b64decode(event.data.n)
+json_parse(event.data.n)
+json_parse(event.data.missing)
+json_parse("not json")
+json_parse('{"a": 1, "a": 2}').a
+json_parse('{"n": 12345678}').n
+date(event.data.s)
+date(event.data.n)
+date("2020-01-01") == timestamp("2020-01-01T00:00:00Z")
+date("Mon, 02 Jan 2006 15:04:05 MST") == timestamp("2006-01-02T15:04:05Z")
+date("2006-01-02T15:04:05.123") == timestamp("2006-01-02T15:04:05.123Z")
+date(1774512121) == timestamp(1774512121)
+date(1774512121538000000) > date(1774512121537)
+timestamp("2020-01-01T00:00:00Z") + duration("1h") > timestamp("2020-01-01T00:30:00Z")
+timestamp("2020-01-01T00:00:00Z") - duration("1h")
+timestamp("2020-01-01T00:00:00Z") == timestamp("2020-01-01T01:00:00+01:00")
+timestamp("bad")
+timestamp(event.data.n)
+timestamp(1577836800)
+duration("1d")
+duration("bad")
+duration("-1.5h")
+duration("1h") + duration("1m") == duration("61m")
+duration("1h") - duration("2h")
+duration("1h") < duration("2h")
+duration("1h") == duration("60m")
+duration("1h") * 2
+duration("1ms") + "x"
+string(duration("1.5s"))
+string(duration("100ms"))
+string(timestamp("2020-01-01T10:00:00+05:00"))
+int(duration("1s"))
+type(event.data.n)
+type(event.data.s) == string
+type(event.data.list) == list
+type(event.data.obj) == map
+type(event.data.nul) == null_type
+type(event.data.t) == bool
+type(event.data.missing)
+type(int)
+dyn(event.data.n) == 5
+int("  5")
+int("5.5")
+int(5.9)
+int(-5.9)
+uint(5.9)
+uint("18446744073709551615")
+uint("18446744073709551616")
+int("9223372036854775807")
+int("-9223372036854775809")
+double("1e3")
+double("inf")
+double(18446744073709551615u)
+string(1u)
+string(-0.5)
+string(1e100)
+string(event.data.list)
+bool(1)
+bool("TRUE")
+bool("False")
+bool(event.data.t)
+9223372036854775807u + 1u
+18446744073709551615u + 1u
+1u - 2u
+2u * 3u
+7u / 2u
+7u % 2u
+7u / 0u
+5 - 3
+5 * -3
+7.5 % 2.0
+-7 / 2
+-7 % 2
+1 / 2.0
+1 - 1u
+1.5 - 1
+"a" - "b"
+[1] - [1]
+"ab" * 2
+"a" < "b" && "b" < "c"
+"abc" > "abd"
+"" < "a"
+true < false
+null < null
+null == null
+null != null
+[1, 2] < [1, 3]
+{"a": 1} < {"a": 2}
+[] == []
+{} == {}
+[1, [2, 3]] == [1, [2, 3]]
+[1, [2, 3]] == [1, [2, 4]]
+{"a": [1]} == {"a": [1.0]}
+event.data.items == event.data.items
+event.data.list == [1, "a", null, {"k": 1}]
+event.data.list == [1, "a", null, {"k": 2}]
+event.data.tags == ["x", "y"]
+1 == 1u
+1 == 1.0
+1u == 1.0
+1 != 1.0
+-1 == 18446744073709551615u
+0.0 == -0.0
+1 < 1.5
+2u > 1.5
+-1 < 0u
+9007199254740993 == 9007199254740992.0
+0.0 / 0.0 == 0.0 / 0.0
+0.0 / 0.0 < 1.0
+1 + 2 == 3
+1 + 2 + "x"
+"x" + 1 + 2
+"x" + (1 + 2)
+1.5 + "x"
+true + "x"
+null + "x"
+"x" + null
+null + null
+null + 1
+1 + null
+[1] + [2] == [1, 2]
+[1] + ["a"]
+[] + []
+{"a": 1} + {"b": 2}
+"a" + ["b"]
+event.data.tags + ["z"]
+event.data.n + event.data.f
+event.data.n + event.data.s
+event.data.s + event.data.n
+event.data.t + event.data.t
+event.data.missing + 1 + 2
+1 + event.data.missing + 2
+event.data.nums.map(x, x + event.data.missing)
+event.data.nums.map(x, event.data.missing)
+event.data.nums.filter(x, event.data.missing)
+event.data.nums.exists(x, event.data.missing)
+event.data.nums.all(x, event.data.missing)
+event.data.nums.all(x, x)
+event.data.nums.exists(x, x)
+event.data.nums.exists_one(x, x)
+event.data.nums.all(x, x > 0 && event.data.missing == null)
+event.data.tags.all(t, t)
+event.data.tags.all(t, t == "x")
+event.data.tags.exists(t, t.startsWith("y"))
+event.data.items.all(i, i.name.size() == 1)
+event.data.items.map(i, i.name).exists(n, n == "b")
+event.data.items.map(i, i.missing.x)
+event.data.items.map(i, i.qty > 1, i.name)
+[[1, 2], [3]].map(l, l.size())
+[[1, 2], [3]].exists(l, l.exists(x, x == 3))
+[1, 2, 3].map(x, [x, x * 10])
+[1, 2, 3].filter(x, x > 5)
+[1, 2, 3].exists(x, x / 0 == 1)
+[1, 2, 3].all(x, x / 0 == 1)
+[1, 2, 3].exists(x, x == 3 || x / 0 == 1)
+[0, 1].exists(x, 1 / x == 1)
+[0, 1].all(x, 1 / x == 1)
+[1, 0].all(x, 1 / x == 1)
+{"a": 1, "b": 2}.all(k, k.size() == 1)
+{"a": 1, "b": 2}.exists_one(k, k == "a")
+{"a": 1}.map(k, k + "!")
+[1, 2, 3].exists(x, x > 2) && [1, 2].all(y, y < 3)
+[1,2,3].map(x, x).filter(y, y > 1).size()
+event.data.missing.filter(x, x)
+event.data.missing.all(x, x)
+!event.data.missing.exists(x, x)
+event.data.missing.exists(x, x) == false
+size(event.data.missing.map(x, x))
+event.data.n.map(x, x)
+event.data.s.exists(x, x)
+event.data.empty == ""
+event.data.empty != ""
+event.data.c == ""
+event.data.user == {}
+event.data.user.x
+event.data.list.x
+event.data.list[0].x
+event.data.items.missing
+event.data.items[0]
+event.data.a.b.c.d == null
+event.data.a.b.c.d != null
+event.data.user.active
+event.data.user.active == true
+event.data.user.active == "true"
+event.data.user.active != false
+event.data.items[0].qty * 2
+event.data.items[0].qty > 1
+int(event.data.items[0].qty) * 2
+event.data.f * 2
+event.data.n / 2
+event.data.n % 2
+event.data.n - 1
+-event.data.n
+int(event.data.n) % 2 == 1
+int(event.data.n) / 2
+event.data.status == "200"
+event.data.status == 200
+int(event.data.status) >= 200 && int(event.data.status) < 300
+event.data.amount > 100.5
+event.data.amount > 100u
+event.data.amount < 1e3
+event.data.n == event.data.f
+event.data.n > event.data.f
+event.data.huge > 1e299
+event.data.huge * 1e10
+event.data.huge * 1e10 == 1.0 / 0.0
+event.data.missing.x.y.z
+event.data.missing["x"]
+event.data.missing[0]
+event.data.missing[event.data.n]
+event.data.n[0]
+event.data.nul[0]
+event.data.nul.x
+event.data.nul.x == null
+event.data.nul == null
+event.data.nul != null
+event.data.nul == 0
+event.data.nul == ""
+event.data.nul < 1
+event.data.nul > -1
+event.data.nul < ""
+event.data.nul + 1
+event.data.nul + "s"
+size(event.data.nul) == 0
+event.data.nul in [null]
+null in [null, 1]
+null in event.data.list
+event.data.user.missing.deep
+event.data.user.name + event.data.user.missing
+event.data.user.missing + event.data.user.name
+vars.x
+vars.x == null
+event.data.s.size() == 2
+event.data.s.size() + 1
+event.data.s.matches("^h")
+event.data.s.matches("[")
+event.data.s.matches(event.data.s)
+"a\nb".matches("a.b")
+"a\nb".matches("(?s)a.b")
+"ABC".matches("(?i)abc")
+"héllo".matches("^h.llo$")
+'\x41\101A'
+"\a\b\f\n\r\t\v\\\"\'\`\?"
+r"\n" == "\\n"
+'''multi
+line''' == "multi\nline"
+"""x"y""" == 'x"y'
+0x10 == 16
+0x10u == 16u
+1e3 == 1000
+.5 == 0.5
+1.5e-3
+-0.0
+-9223372036854775808
+-9223372036854775807 - 1
+-9223372036854775807 - 2
+9223372036854775807 + 0
+18446744073709551615u
+true ? 1 : 2
+false ? 1 : 2
+1 ? "a" : "b"
+"" ? "a" : "b"
+"x" ? "a" : "b"
+true ? event.data.missing : "x"
+event.data.t ? event.data.s : event.data.n
+(event.data.t ? event.data.user : event.data.obj).name
+event.data.missing ? 1 : event.data.missing2 ? 2 : 3
+event.data.n > 3 ? "big" : "small"
+event.data.n > 3 ? event.data.n > 4 ? "huge" : "big" : "small"
+true && true
+true && false
+false && event.data.missing
+event.data.missing && false
+event.data.missing || true
+true || event.data.missing
+false || false
+false && (1 / 0 == 1)
+true || (1 / 0 == 1)
+(1 / 0 == 1) || true
+(1 / 0 == 1) && false
+(1 / 0 == 1) || false
+false || (1 / 0 == 1)
+(1 / 0) || "x"
+"x" && (1 / 0)
+!(1 / 0 == 1)
+(1/0) == null
+(1/0) != null
+(1/0) < 1
+(1/0) > 1
+1 < (1/0)
+1 > (1/0)
+size(1/0)
+(1/0) + 1
+1 + (1/0)
+(1/0) + event.data.missing
+event.data.missing + (1/0)
+[1/0]
+[1/0].size()
+(1/0) in [1]
+lowercase(1/0)
+int(1/0)
+"a" + 1/0
+event.data.items[5] + 1
+1 + event.data.items[5]
+event.data.items[5] == event.data.missing
+event.data.items[5] != event.data.missing
+event.data.n == 5 && event.data.s == "hi" && event.data.t
+event.data.n == 5 && event.data.s == "hi" && event.data.missing
+event.data.s == "hi" || event.data.missing
+event.data.missing == event.data.missing
+event.data.missing != event.data.missing
+event.data.missing == []
+event.data.missing in []
+[] == event.data.missing
+event.data.user.name == event.data.user["name"]
+async.data.s == event.data.s && async.data.userId == event.data.userId
+async.data.n == event.data.n
+async.data.n > event.data.missing
+async.name.startsWith("app/")
+event.data.date > "2024"
+date(event.data.date).getFullYear() == 2024
+date(event.data.date).getMonth() == 4
+date(event.data.date).getHours("America/New_York")
+timestamp(event.data.date).getDayOfWeek()
+timestamp(event.data.date).getDayOfYear()
+timestamp(event.data.date).getSeconds()
+timestamp(event.data.date).getMinutes("+01:30")
+timestamp(event.data.date).getMinutes("-01:30")
+timestamp(event.data.date).getDate("UTC")
+timestamp(event.data.date).getDate("")
+timestamp(event.data.date).getFullYear(5)
+duration("3723s").getHours()
+duration("3723s").getMinutes()
+duration("3723s").getSeconds()
+duration("3723.5s").getMilliseconds()
+event.data.missing.getHours()
+timestamp(event.data.date) + duration("24h") > timestamp(event.data.date)
+timestamp(event.data.date) - timestamp("2024-04-30T10:00:00Z") == duration("24h")
+timestamp(event.data.date) - timestamp("2024-04-30T10:00:00Z")
+timestamp("0001-01-01T00:00:00Z") - duration("1s")
+timestamp("9999-12-31T23:59:59Z") + duration("1s")
+timestamp(253402300800)
+timestamp("2020-01-01T00:00:00Z") < "x"
+duration("1h") < 1
+now_plus("bad") > now()
+now_plus(event.data.missing) > now()
+now_minus(event.data.n) > now()
+now_plus("") > now()
+now_plus("0") > now_minus("1ns")
+timestamp("2020-01-01T10:00:00+05:00").getHours()
+"" + timestamp("2020-01-01T10:00:00+05:00")
+"" + timestamp("2020-01-01T10:00:00Z")
+date("2020-01-01T10:00:00+05:00").getHours()
+"" + date("2020-01-01T10:00:00+05:00")
+"" + date("2020-01-01T10:00:00")
+"" + date("02 Jan 06 15:04 -0700")
+"" + date("Jan  2 15:04:05")
+"" + date("2006-01-02T15:04:05.5")
+"" + date("2006-01-02t15:04:05Z")
+"" + date("2006-01-02 15:04:05Z")
+date("bad") == event.data.missing
+date("bad") || true
+date("bad") ? 1 : 2
+date("bad") + duration("1h")
+size(date("bad"))
+event.data.missing + date("bad")
+date("bad") + event.data.missing
+date("bad") < event.data.missing
+event.data.missing < date("bad")
+"a\"b" == 'a"b'
+'it\'s'
+"x\\y"
+"tab\there"
+"a\nb"
+event.data.s == "h\i"
+size("a\nb")
+"vars." + "\n"
+size("vars.\n")
+{"a": 1, "a": 2}
+{"a": 1, "a": 2}.a
+event.data.nul < [1]
+event.data.nul > {}
+null < true
+null < duration("1h")
+event.data.f % 2
+event.data.f - 1
+true - 1
+null - 1
+[1] * 2
+"a" / 1
+{} % 1
+b"" + 1
+!"x"
+-"x"
+size(1)
+size(null)
+
+# Reserved words: allowed as field names after '.', rejected as identifiers.
+# 'in', 'true', 'false' and 'null' are keywords, rejected after '.' too.
+event.data.as
+event.data.as.id
+event.data["as"].id
+has(event.data.as)
+has(event.data.as.id)
+event.data.nested.as.as
+event.data.as.id == "as-1"
+as
+.as
+as(1)
+{as: 1}
+{"as": 1}.as
+event.data.as()
+[1].all(as, as > 0)
+event.data.as.size()
+event.data.break
+event.data.break.id
+event.data["break"].id
+has(event.data.break)
+has(event.data.break.id)
+event.data.nested.break.break
+event.data.break.id == "break-1"
+break
+.break
+break(1)
+{break: 1}
+{"break": 1}.break
+event.data.break()
+[1].all(break, break > 0)
+event.data.break.size()
+event.data.const
+event.data.const.id
+event.data["const"].id
+has(event.data.const)
+has(event.data.const.id)
+event.data.nested.const.const
+event.data.const.id == "const-1"
+const
+.const
+const(1)
+{const: 1}
+{"const": 1}.const
+event.data.const()
+[1].all(const, const > 0)
+event.data.const.size()
+event.data.continue
+event.data.continue.id
+event.data["continue"].id
+has(event.data.continue)
+has(event.data.continue.id)
+event.data.nested.continue.continue
+event.data.continue.id == "continue-1"
+continue
+.continue
+continue(1)
+{continue: 1}
+{"continue": 1}.continue
+event.data.continue()
+[1].all(continue, continue > 0)
+event.data.continue.size()
+event.data.else
+event.data.else.id
+event.data["else"].id
+has(event.data.else)
+has(event.data.else.id)
+event.data.nested.else.else
+event.data.else.id == "else-1"
+else
+.else
+else(1)
+{else: 1}
+{"else": 1}.else
+event.data.else()
+[1].all(else, else > 0)
+event.data.else.size()
+event.data.for
+event.data.for.id
+event.data["for"].id
+has(event.data.for)
+has(event.data.for.id)
+event.data.nested.for.for
+event.data.for.id == "for-1"
+for
+.for
+for(1)
+{for: 1}
+{"for": 1}.for
+event.data.for()
+[1].all(for, for > 0)
+event.data.for.size()
+event.data.function
+event.data.function.id
+event.data["function"].id
+has(event.data.function)
+has(event.data.function.id)
+event.data.nested.function.function
+event.data.function.id == "function-1"
+function
+.function
+function(1)
+{function: 1}
+{"function": 1}.function
+event.data.function()
+[1].all(function, function > 0)
+event.data.function.size()
+event.data.if
+event.data.if.id
+event.data["if"].id
+has(event.data.if)
+has(event.data.if.id)
+event.data.nested.if.if
+event.data.if.id == "if-1"
+if
+.if
+if(1)
+{if: 1}
+{"if": 1}.if
+event.data.if()
+[1].all(if, if > 0)
+event.data.if.size()
+event.data.import
+event.data.import.id
+event.data["import"].id
+has(event.data.import)
+has(event.data.import.id)
+event.data.nested.import.import
+event.data.import.id == "import-1"
+import
+.import
+import(1)
+{import: 1}
+{"import": 1}.import
+event.data.import()
+[1].all(import, import > 0)
+event.data.import.size()
+event.data.let
+event.data.let.id
+event.data["let"].id
+has(event.data.let)
+has(event.data.let.id)
+event.data.nested.let.let
+event.data.let.id == "let-1"
+let
+.let
+let(1)
+{let: 1}
+{"let": 1}.let
+event.data.let()
+[1].all(let, let > 0)
+event.data.let.size()
+event.data.loop
+event.data.loop.id
+event.data["loop"].id
+has(event.data.loop)
+has(event.data.loop.id)
+event.data.nested.loop.loop
+event.data.loop.id == "loop-1"
+loop
+.loop
+loop(1)
+{loop: 1}
+{"loop": 1}.loop
+event.data.loop()
+[1].all(loop, loop > 0)
+event.data.loop.size()
+event.data.package
+event.data.package.id
+event.data["package"].id
+has(event.data.package)
+has(event.data.package.id)
+event.data.nested.package.package
+event.data.package.id == "package-1"
+package
+.package
+package(1)
+{package: 1}
+{"package": 1}.package
+event.data.package()
+[1].all(package, package > 0)
+event.data.package.size()
+event.data.namespace
+event.data.namespace.id
+event.data["namespace"].id
+has(event.data.namespace)
+has(event.data.namespace.id)
+event.data.nested.namespace.namespace
+event.data.namespace.id == "namespace-1"
+namespace
+.namespace
+namespace(1)
+{namespace: 1}
+{"namespace": 1}.namespace
+event.data.namespace()
+[1].all(namespace, namespace > 0)
+event.data.namespace.size()
+event.data.return
+event.data.return.id
+event.data["return"].id
+has(event.data.return)
+has(event.data.return.id)
+event.data.nested.return.return
+event.data.return.id == "return-1"
+return
+.return
+return(1)
+{return: 1}
+{"return": 1}.return
+event.data.return()
+[1].all(return, return > 0)
+event.data.return.size()
+event.data.var
+event.data.var.id
+event.data["var"].id
+has(event.data.var)
+has(event.data.var.id)
+event.data.nested.var.var
+event.data.var.id == "var-1"
+var
+.var
+var(1)
+{var: 1}
+{"var": 1}.var
+event.data.var()
+[1].all(var, var > 0)
+event.data.var.size()
+event.data.void
+event.data.void.id
+event.data["void"].id
+has(event.data.void)
+has(event.data.void.id)
+event.data.nested.void.void
+event.data.void.id == "void-1"
+void
+.void
+void(1)
+{void: 1}
+{"void": 1}.void
+event.data.void()
+[1].all(void, void > 0)
+event.data.void.size()
+event.data.while
+event.data.while.id
+event.data["while"].id
+has(event.data.while)
+has(event.data.while.id)
+event.data.nested.while.while
+event.data.while.id == "while-1"
+while
+.while
+while(1)
+{while: 1}
+{"while": 1}.while
+event.data.while()
+[1].all(while, while > 0)
+event.data.while.size()
+event.data.in
+event.data.in.id
+event.data["in"].id
+has(event.data.in)
+has(event.data.in.id)
+event.data.nested.in.in
+event.data.in.id == "in-1"
+in
+.in
+in(1)
+{in: 1}
+{"in": 1}.in
+event.data.in()
+[1].all(in, in > 0)
+event.data.in.size()
+event.data.true
+event.data.true.id
+event.data["true"].id
+has(event.data.true)
+has(event.data.true.id)
+event.data.nested.true.true
+event.data.true.id == "true-1"
+true
+.true
+true(1)
+{true: 1}
+{"true": 1}.true
+event.data.true()
+[1].all(true, true > 0)
+event.data.true.size()
+event.data.false
+event.data.false.id
+event.data["false"].id
+has(event.data.false)
+has(event.data.false.id)
+event.data.nested.false.false
+event.data.false.id == "false-1"
+false
+.false
+false(1)
+{false: 1}
+{"false": 1}.false
+event.data.false()
+[1].all(false, false > 0)
+event.data.false.size()
+event.data.null
+event.data.null.id
+event.data["null"].id
+has(event.data.null)
+has(event.data.null.id)
+event.data.nested.null.null
+event.data.null.id == "null-1"
+null
+.null
+null(1)
+{null: 1}
+{"null": 1}.null
+event.data.null()
+[1].all(null, null > 0)
+event.data.null.size()

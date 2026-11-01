@@ -170,6 +170,18 @@ const fns = [
     },
   ),
 
+  // `import` is a CEL reserved word, but still a valid field name after a dot.
+  create(
+    { id: "keyed-import", concurrency: [{ limit: 1, key: "event.data.import.id" }], triggers: [{ event: "e2e/keyed-import" }] },
+    async ({ event, step }) => {
+      const { batch, import: imp } = event.data;
+      await step.run("work", () =>
+        tracked(`import-${batch}`, () => tracked(`import-${batch}-${imp.id}`, () => sleepMs(500))),
+      );
+      return "ok";
+    },
+  ),
+
   create(
     { id: "throttled", throttle: { limit: 1, period: "2s" }, triggers: [{ event: "e2e/throttled" }] },
     async ({ runId }) => {

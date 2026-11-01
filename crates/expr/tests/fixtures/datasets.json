@@ -198,5 +198,143 @@
     "items": []
    }
   }
+ },
+ "reserved": {
+  "event": {
+   "name": "app/import.created",
+   "ts": 1774512121538,
+   "id": "01KMMJM9P2JQWH09SKMQM4J1DH",
+   "user": {},
+   "data": {
+    "as": {
+     "id": "as-1"
+    },
+    "break": {
+     "id": "break-1"
+    },
+    "const": {
+     "id": "const-1"
+    },
+    "continue": {
+     "id": "continue-1"
+    },
+    "else": {
+     "id": "else-1"
+    },
+    "for": {
+     "id": "for-1"
+    },
+    "function": {
+     "id": "function-1"
+    },
+    "if": {
+     "id": "if-1"
+    },
+    "import": {
+     "id": "import-1"
+    },
+    "let": {
+     "id": "let-1"
+    },
+    "loop": {
+     "id": "loop-1"
+    },
+    "package": {
+     "id": "package-1"
+    },
+    "namespace": {
+     "id": "namespace-1"
+    },
+    "return": {
+     "id": "return-1"
+    },
+    "var": {
+     "id": "var-1"
+    },
+    "void": {
+     "id": "void-1"
+    },
+    "while": {
+     "id": "while-1"
+    },
+    "in": {
+     "id": "in-1"
+    },
+    "true": {
+     "id": "true-1"
+    },
+    "false": {
+     "id": "false-1"
+    },
+    "null": {
+     "id": "null-1"
+    },
+    "nested": {
+     "as": {
+      "as": "as-2"
+     },
+     "break": {
+      "break": "break-2"
+     },
+     "const": {
+      "const": "const-2"
+     },
+     "continue": {
+      "continue": "continue-2"
+     },
+     "else": {
+      "else": "else-2"
+     },
+     "for": {
+      "for": "for-2"
+     },
+     "function": {
+      "function": "function-2"
+     },
+     "if": {
+      "if": "if-2"
+     },
+     "import": {
+      "import": "import-2"
+     },
+     "let": {
+      "let": "let-2"
+     },
+     "loop": {
+      "loop": "loop-2"
+     },
+     "package": {
+      "package": "package-2"
+     },
+     "namespace": {
+      "namespace": "namespace-2"
+     },
+     "return": {
+      "return": "return-2"
+     },
+     "var": {
+      "var": "var-2"
+     },
+     "void": {
+      "void": "void-2"
+     },
+     "while": {
+      "while": "while-2"
+     },
+     "in": {
+      "in": "in-2"
+     },
+     "true": {
+      "true": "true-2"
+     },
+     "false": {
+      "false": "false-2"
+     },
+     "null": {
+      "null": "null-2"
+     }
+    }
+   }
+  }
  }
 }

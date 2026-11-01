@@ -297,7 +297,7 @@ KEEP=1 ./e2e/run.sh              # leave server + app running to explore the das
 ./e2e/shutdown.sh                # SIGTERM mid-work: nothing lost, in-flight steps finished or handed back
 ```
 
-The e2e suite (33 scenarios covering every feature above) passes against the official
+The e2e suite (34 scenarios covering every feature above) passes against the official
 Inngest server, which validates the expectations, and against oxidle on all three backends.
 
 ## Architecture

@@ -703,6 +703,23 @@ fn eval_bool_contexts() {
 }
 
 #[test]
+fn reserved_words_as_field_names() {
+    // Field and method names after a dot may be reserved words, as in cel-go; the keywords
+    // `in`, `true`, `false` and `null` may not.
+    let d = json!({"import": {"id": "imp-1", "package": {"as": "x"}}, "let": 1});
+    assert_eq!(key("event.data.import.id", d.clone()), "imp-1");
+    assert_eq!(key("event.data.import.package.as", d.clone()), "x");
+    assert!(bool_data("has(event.data.import.id) && event.data['import'].id == 'imp-1'", d.clone()));
+    assert!(bool_data("event.data.let == 1", d.clone()));
+    for src in ["import", "event.data.import + let", "{import: 1}", "import(1)", ".import", "[1].all(var, var > 0)"] {
+        assert!(Expression::compile(src).unwrap_err().to_string().contains("reserved identifier"), "{src}");
+    }
+    for src in ["event.data.in", "event.data.true", "event.data.null.id", "event.data.false()", ".true"] {
+        assert!(Expression::compile(src).is_err(), "{src}");
+    }
+}
+
+#[test]
 fn key_formatting() {
     let d = json!({
         "ingressId": "IN_1", "userId": "u-1", "n": 1, "f": 1.5, "big": 1234567, "t": true,

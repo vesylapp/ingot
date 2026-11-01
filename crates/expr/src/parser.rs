@@ -106,6 +106,7 @@ impl Tok {
             Tok::Double(d) => format!("double '{d}'"),
             Tok::Str(_) => "string literal".into(),
             Tok::Bytes(_) => "bytes literal".into(),
+            Tok::Ident(s) if KEYWORDS.contains(&s.as_str()) => format!("keyword '{s}'"),
             Tok::Ident(s) => format!("identifier '{s}'"),
             Tok::Op(o) => format!("'{o}'"),
             Tok::Eof => "end of input".into(),
@@ -396,10 +397,15 @@ fn push_code(out: &mut Vec<u8>, v: u32, bytes: bool) -> Result<(), String> {
 // Parser
 // ---------------------------------------------------------------------------
 
+/// Words that cannot name a variable or global function (cel-go's `reservedIds`). Apart from
+/// the keywords, they are fine as field and method names after a `.`: `event.data.import`.
 const RESERVED: &[&str] = &[
     "as", "break", "const", "continue", "else", "for", "function", "if", "import", "let", "loop",
-    "package", "namespace", "return", "var", "void", "while", "in",
+    "package", "namespace", "return", "var", "void", "while", "in", "true", "false", "null",
 ];
+
+/// Lexer keywords in CEL's grammar: a syntax error wherever an identifier is expected.
+const KEYWORDS: &[&str] = &["in", "true", "false", "null"];
 
 struct Parser {
     toks: Vec<Token>,
@@ -621,7 +627,7 @@ impl Parser {
                 if self.is_op("?") {
                     return Err(self.err_here("identifier (optional field selection is unsupported)"));
                 }
-                let name = self.ident()?;
+                let name = self.field()?;
                 if self.eat("(") {
                     let args = self.expr_list(")")?;
                     e = mk(PKind::Call {
@@ -650,15 +656,23 @@ impl Parser {
         }
     }
 
+    /// A variable or global function name.
     fn ident(&mut self) -> Result<String, String> {
+        let s = self.field()?;
+        if RESERVED.contains(&s.as_str()) {
+            self.i -= 1;
+            return Err(format!(
+                "Syntax error: reserved identifier: {s} (offset {})",
+                self.peek().pos
+            ));
+        }
+        Ok(s)
+    }
+
+    /// A field or method name after `.`, where reserved words other than keywords are allowed.
+    fn field(&mut self) -> Result<String, String> {
         match &self.peek().tok {
-            Tok::Ident(s) => {
-                if RESERVED.contains(&s.as_str()) {
-                    return Err(format!(
-                        "Syntax error: reserved identifier: {s} (offset {})",
-                        self.peek().pos
-                    ));
-                }
+            Tok::Ident(s) if !KEYWORDS.contains(&s.as_str()) => {
                 let s = s.clone();
                 self.i += 1;
                 Ok(s)

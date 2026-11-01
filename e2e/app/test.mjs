@@ -222,6 +222,19 @@ const tests = {
     eq((await appState()).maxActive[`keyed-${u}`], 1, "max concurrent per key");
   },
 
+  async concurrencyKeyReservedWord() {
+    const batch = uid();
+    const ids = await send(
+      ["a", "a", "a", "b", "b", "b"].map((id) => ({ name: "e2e/keyed-import", data: { batch, import: { id } } })),
+    );
+    for (const id of ids) await waitRun(id, { timeout: 30000 });
+    const { maxActive } = await appState();
+    eq(maxActive[`import-${batch}-a`], 1, "max concurrent for import a");
+    eq(maxActive[`import-${batch}-b`], 1, "max concurrent for import b");
+    // A key that didn't evaluate per event would serialize every run.
+    eq(maxActive[`import-${batch}`], 2, "imports a and b run side by side");
+  },
+
   async throttle() {
     const ids = await send([1, 2, 3].map(() => ({ name: "e2e/throttled", data: {} })));
     const runs = [];

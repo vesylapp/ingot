@@ -35,6 +35,8 @@
 //! - nesting is limited to 64 syntactic levels / 200 tree levels (cel-go: 250);
 //! - formatting of nested CEL-created containers in string concatenation is
 //!   approximate (e.g. a null inside a list literal prints `<nil>`, Go `0`).
+//! - map literal keys must be strings, ints, uints or bools, as the CEL spec
+//!   says; Go builds maps with any key (`{null: 1}`, `{1.5: 1}`).
 
 mod compile;
 mod eval;
