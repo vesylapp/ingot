@@ -32,6 +32,9 @@ pub(crate) struct Evaluator<'a> {
     now: Option<Ts>,
 }
 
+/// -2^63 as a double (exact); `[-2^63, 2^63)` is the range convertible to i64.
+pub(crate) const I64_MIN_F: f64 = i64::MIN as f64;
+
 fn const_val(c: &Const) -> Val<'_> {
     match c {
         Const::Null => Val::Null,
@@ -212,10 +215,13 @@ impl<'a> Evaluator<'a> {
                     if !matches!(kv, Val::Str(_) | Val::Int(_) | Val::Uint(_) | Val::Bool(_)) {
                         return Val::err(format!("unsupported key type: {}", kv.kind().name()));
                     }
-                    if out.iter().any(|(e, _)| cel_eq(e, &kv) && e.kind() == kv.kind()) {
-                        return Val::err(format!("Failed with repeated key: {}", kv.go_string()));
+                    // Duplicate keys: the last one wins (map literal keys are
+                    // lifted into variables in Inngest, so cel-go never rejects them).
+                    if let Some(slot) = out.iter_mut().find(|(e, _)| cel_eq(e, &kv) && e.kind() == kv.kind()) {
+                        slot.1 = vv;
+                    } else {
+                        out.push((kv, vv));
                     }
-                    out.push((kv, vv));
                 }
                 Val::Map(MapV::Owned(Rc::new(out)))
             }
@@ -264,7 +270,7 @@ impl<'a> Evaluator<'a> {
 
     // -- attributes ---------------------------------------------------------
 
-    fn root_val(&self, r: Root) -> Val<'a> {
+    fn root_val(&self, r: Root, quals: &[Qual]) -> Val<'a> {
         let v = match r {
             Root::Event => self.event,
             Root::Async => self.async_,
@@ -272,7 +278,16 @@ impl<'a> Evaluator<'a> {
         };
         match v {
             Some(j) => Val::from_json(j),
-            None => Val::err(format!("no such attribute(s): {}", r.name())),
+            None => {
+                // cel-go names the longest dotted (namespaced) identifier.
+                let mut name = r.name().to_string();
+                for q in quals {
+                    let Qual::Field(f) = q else { break };
+                    name.push('.');
+                    name.push_str(f);
+                }
+                Val::err(format!("no such attribute(s): {name}"))
+            }
         }
     }
 
@@ -360,7 +375,7 @@ impl<'a> Evaluator<'a> {
                     if self.matches_missing(*r, &qvals) {
                         return Val::Unknown;
                     }
-                    let mut cur = self.root_val(*r);
+                    let mut cur = self.root_val(*r, &a.quals);
                     for k in &qvals {
                         if cur.is_unknown_or_err() {
                             return cur;
@@ -369,7 +384,7 @@ impl<'a> Evaluator<'a> {
                     }
                     return cur;
                 }
-                let base = self.root_val(*r);
+                let base = self.root_val(*r, &a.quals);
                 self.apply_quals(base, &a.quals)
             }
             Base::Local(slot) => {
@@ -427,9 +442,10 @@ impl<'a> Evaluator<'a> {
         };
         for i in 0..len {
             let elem = match &list {
-                Some(l) => l.get(i).unwrap_or(Val::Null),
-                None => keys[i].clone(),
-            };
+                Some(l) => l.get(i),
+                None => keys.get(i).cloned(),
+            }
+            .unwrap_or(Val::Null);
             let cond = match c.kind {
                 CompKind::Exists => {
                     let n = self.call(Func::Not, &[accu.clone()]);
@@ -516,6 +532,9 @@ impl<'a> Evaluator<'a> {
 
     /// Inngest's `runtimeUnknownCall` wrapper around every call.
     fn call(&mut self, f: Func, args: &[Val<'a>]) -> Val<'a> {
+        if args.iter().any(Val::is_go_nil) {
+            return call_with_go_nil(f, args);
+        }
         // Track up to two distinct argument types, like Inngest's argColl.
         let mut t0 = Kind::Null;
         let mut t1 = Kind::Null;
@@ -581,6 +600,17 @@ impl<'a> Evaluator<'a> {
                         .iter()
                         .map(|a| if matches!(a, Val::Null) { zero.clone() } else { a.clone() })
                         .collect();
+                    let comparable = |v: &Val<'_>| {
+                        matches!(
+                            v,
+                            Val::Int(_) | Val::Uint(_) | Val::Double(_) | Val::Str(_) | Val::Bytes(_)
+                                | Val::Bool(_) | Val::Ts(_) | Val::Dur(_)
+                        )
+                    };
+                    if f != Func::Add && !comparable(&zeroed[0]) {
+                        // cel-go asserts traits.Comparer here and panics.
+                        return Val::go_nil("comparison with null");
+                    }
                     return self.native(f, &zeroed);
                 }
                 _ => {}
@@ -604,7 +634,33 @@ impl<'a> Evaluator<'a> {
         if let Some(bad) = args.iter().find(|a| a.is_unknown_or_err()) {
             return bad.clone();
         }
-        let no = || Val::no_overload(f.name());
+        // cel-go reports "no such overload" when the left operand supports the
+        // operation but not with this right operand, and names the function
+        // otherwise.
+        let lhs_supports = match (f, args.first()) {
+            (Func::Add, Some(v)) => matches!(
+                v,
+                Val::Int(_) | Val::Uint(_) | Val::Double(_) | Val::Str(_) | Val::Bytes(_) | Val::List(_)
+                    | Val::Ts(_) | Val::Dur(_)
+            ),
+            (Func::Sub, Some(v)) => matches!(v, Val::Int(_) | Val::Uint(_) | Val::Double(_) | Val::Ts(_) | Val::Dur(_)),
+            (Func::Mul | Func::Div, Some(v)) => matches!(v, Val::Int(_) | Val::Uint(_) | Val::Double(_)),
+            (Func::Mod, Some(v)) => matches!(v, Val::Int(_) | Val::Uint(_)),
+            (Func::Lt | Func::Le | Func::Gt | Func::Ge, Some(v)) => matches!(
+                v,
+                Val::Int(_) | Val::Uint(_) | Val::Double(_) | Val::Str(_) | Val::Bytes(_) | Val::Bool(_)
+                    | Val::Ts(_) | Val::Dur(_)
+            ),
+            (Func::Size, _) => false,
+            _ => true,
+        };
+        let no = || {
+            if lhs_supports {
+                Val::err("no such overload")
+            } else {
+                Val::no_overload(f.name())
+            }
+        };
         match f {
             Func::Add => match (&args[0], &args[1]) {
                 (Val::Int(a), Val::Int(b)) => a.checked_add(*b).map_or_else(|| Val::err("integer overflow"), Val::Int),
@@ -688,6 +744,7 @@ impl<'a> Evaluator<'a> {
                     Func::Gt => o == Ordering::Greater,
                     _ => o != Ordering::Less,
                 }),
+                Err(Val::Err(m)) if m.starts_with("NaN") => Val::Err(m),
                 Err(_) => no(),
             },
             Func::In => match &args[1] {
@@ -738,7 +795,7 @@ impl<'a> Evaluator<'a> {
                 Val::Int(i) => Val::Int(*i),
                 Val::Uint(u) => i64::try_from(*u).map_or_else(|_| Val::err("integer overflow"), Val::Int),
                 Val::Double(d) => {
-                    if d.is_finite() && *d >= -9.223_372_036_854_775_808e18 && *d < 9.223_372_036_854_775_808e18 {
+                    if (I64_MIN_F..-I64_MIN_F).contains(d) {
                         Val::Int(d.trunc() as i64)
                     } else {
                         Val::err("integer overflow")
@@ -870,7 +927,7 @@ impl<'a> Evaluator<'a> {
                     Val::Double(d) if d.is_finite() => timefmt::date_from_int(*d as i64),
                     _ => None,
                 };
-                t.map_or_else(|| Val::err("date: unknown date format"), Val::Ts)
+                t.map_or_else(|| Val::go_nil("date: unknown date format"), Val::Ts)
             }
             Func::Now => Val::Ts(self.now()),
             Func::NowPlus | Func::NowMinus => match &args[0] {
@@ -883,12 +940,27 @@ impl<'a> Evaluator<'a> {
                             None => Val::err("integer overflow"),
                         }
                     }
-                    Err(e) => Val::err(e),
+                    Err(e) => Val::go_nil(&e),
                 },
-                _ => no(),
+                _ => Val::go_nil("now_plus/now_minus require a string duration"),
             },
         }
     }
+}
+
+/// A call with a Go `nil` argument: nil contributes no type, so the call is
+/// only survivable when an unknown/error argument routes it to
+/// `handleUnknownCall`; otherwise cel-go panics and evaluation aborts.
+fn call_with_go_nil<'a>(f: Func, args: &[Val<'a>]) -> Val<'a> {
+    let nil = args.iter().find(|a| a.is_go_nil()).cloned().unwrap_or(Val::Unknown);
+    let other_unknownish = args.iter().any(|a| !a.is_go_nil() && a.is_unknown_or_err());
+    if !other_unknownish {
+        return nil;
+    }
+    if matches!(f, Func::Lt | Func::Le | Func::Gt | Func::Ge) && args.first().is_some_and(Val::is_go_nil) {
+        return nil;
+    }
+    handle_unknown(f, args, args.iter().any(|a| matches!(a, Val::Null)))
 }
 
 /// Inngest's `handleUnknownCall`: concrete results for calls with unknown or

@@ -11,6 +11,30 @@
 //! Expressions are compiled once ([`Expression::compile`], or cached through
 //! [`ExprCache`]) and evaluated many times against borrowed JSON input
 //! without copying it.
+//!
+//! Behaviour is verified against the Go implementation with a differential
+//! fixture (`tests/fixtures/go_oracle.jsonl`). Notable Inngest quirks that are
+//! reproduced on purpose:
+//! - plain `'...'`/`"..."` literals are taken verbatim (Inngest's literal
+//!   lifter does not process escape sequences) unless the source contains
+//!   `vars.`;
+//! - JSON numbers are doubles, so `event.data.n + 1` concatenates (`"51"`),
+//!   while `-`, `*`, `/`, `%` across int/double are errors;
+//! - a referenced-but-missing path makes its present ancestors "unknown" too
+//!   (`size(event.data.obj)` is 0 if `event.data.obj.zz` is also referenced
+//!   and missing);
+//! - missing keys reached through an index or a computed value are errors
+//!   rather than unknowns (still `== null` and falsy).
+//!
+//! Known, intentional deviations from Go:
+//! - raw (`r"…"`), bytes (`b"…"`) and triple-quoted literals follow CEL (Go's
+//!   lifter mangles them), and unterminated strings are syntax errors;
+//! - `date()` also accepts doubles (e.g. `date(event.ts)`); Go fails there;
+//! - `now()` is sampled once per evaluation; times from `date(int)`/`now()`
+//!   are UTC rather than the server's local zone (only visible when formatted);
+//! - nesting is limited to 64 syntactic levels / 200 tree levels (cel-go: 250);
+//! - formatting of nested CEL-created containers in string concatenation is
+//!   approximate (e.g. a null inside a list literal prints `<nil>`, Go `0`).
 
 mod compile;
 mod eval;
@@ -113,8 +137,8 @@ impl Expression {
     /// ints, doubles -> JSON floats).
     pub fn eval(&self, vars: Vars<'_>) -> Result<Json, ExprError> {
         match self.run(vars) {
-            Val::Err(e) => Err(ExprError::Eval(e.to_string())),
-            v => v.to_json().map_err(ExprError::Eval),
+            Val::Err(e) => Err(ExprError::Eval(value::err_message(&e))),
+            v => v.to_json().map_err(|e| ExprError::Eval(value::err_message(&e))),
         }
     }
 
@@ -124,7 +148,7 @@ impl Expression {
         match self.run(vars) {
             Val::Bool(b) => Ok(b),
             Val::Unknown => Ok(false),
-            Val::Err(e) => Err(ExprError::Eval(e.to_string())),
+            Val::Err(e) => Err(ExprError::Eval(value::err_message(&e))),
             other => Err(ExprError::Type(format!(
                 "expression did not return true or false: returned type {} ({})",
                 other.kind().name(),
@@ -134,7 +158,7 @@ impl Expression {
     }
 
     /// Key expressions (concurrency/throttle/rateLimit/debounce/batch/singleton keys): strings
-    /// are returned as-is, everything else is formatted like Go's `%v`; null/unknown => "<nil>".
+    /// are returned as-is, everything else is formatted like Go's `%v`; null/unknown => `"<nil>"`.
     pub fn eval_key(&self, vars: Vars<'_>) -> Result<String, ExprError> {
         key_string(self.run(vars))
     }
@@ -154,15 +178,10 @@ impl Expression {
             Val::Int(i) => Ok(i),
             Val::Uint(u) => i64::try_from(u)
                 .map_err(|_| ExprError::Type(format!("expression returned an out of range int: {u}"))),
-            Val::Double(d)
-                if d.is_finite()
-                    && d.fract() == 0.0
-                    && d >= -9.223_372_036_854_775_808e18
-                    && d < 9.223_372_036_854_775_808e18 =>
-            {
+            Val::Double(d) if d.fract() == 0.0 && (eval::I64_MIN_F..-eval::I64_MIN_F).contains(&d) => {
                 Ok(d as i64)
             }
-            Val::Err(e) => Err(ExprError::Eval(e.to_string())),
+            Val::Err(e) => Err(ExprError::Eval(value::err_message(&e))),
             Val::Unknown => Err(ExprError::Type("expression returned non-int: false".into())),
             other => Err(ExprError::Type(format!(
                 "expression returned non-int: {}",
@@ -181,7 +200,7 @@ fn key_string(v: Val<'_>) -> Result<String, ExprError> {
     match v {
         Val::Str(s) => Ok(s.as_str().to_string()),
         Val::Null | Val::Unknown => Ok("<nil>".to_string()),
-        Val::Err(e) => Err(ExprError::Eval(e.to_string())),
+        Val::Err(e) => Err(ExprError::Eval(value::err_message(&e))),
         other => Ok(other.go_string()),
     }
 }

@@ -10,6 +10,16 @@ use serde_json::{Map, Value as Json};
 
 use crate::timefmt;
 
+pub(crate) const GO_NIL_PREFIX: &str = "\u{0}nil:";
+
+/// Converts an error value's message for the public API.
+pub(crate) fn err_message(e: &str) -> String {
+    match e.strip_prefix(GO_NIL_PREFIX) {
+        Some(reason) => format!("expression did not return true or false ({reason})"),
+        None => e.to_string(),
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Kind {
     Null,
@@ -198,6 +208,17 @@ impl<'a> Val<'a> {
 
     pub(crate) fn no_overload(name: &str) -> Val<'a> {
         Val::err(format!("no such overload: {name}"))
+    }
+
+    /// A Go `nil` result (e.g. a failed `date()`): it is falsy in logical
+    /// contexts, but aborts evaluation when used as a function argument or
+    /// returned.
+    pub(crate) fn go_nil(reason: &str) -> Val<'a> {
+        Val::err(format!("{GO_NIL_PREFIX}{reason}"))
+    }
+
+    pub(crate) fn is_go_nil(&self) -> bool {
+        matches!(self, Val::Err(e) if e.starts_with(GO_NIL_PREFIX))
     }
 
     pub(crate) fn string(s: String) -> Val<'a> {

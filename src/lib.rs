@@ -28,6 +28,7 @@ pub async fn run(cfg: config::Config) -> anyhow::Result<()> {
         max_lifetime: std::time::Duration::from_secs(cfg.pg_lifetime_mins * 60),
     };
     let sql = Arc::new(store::sql::SqlStore::connect(&sql_url, pool_cfg).await?);
+    sql.set_retention_ms(cfg.retention_days as i64 * 86_400_000);
     tracing::info!(
         backend = if cfg.postgres_uri.is_some() { "postgres" } else { "sqlite" },
         "persistence ready"
@@ -35,8 +36,10 @@ pub async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let meta: Arc<dyn store::MetaStore> = sql.clone();
     let state: Arc<dyn store::StateStore> = match &cfg.redis_uri {
         Some(uri) => {
-            let _ = uri;
-            anyhow::bail!("--redis-uri is not supported yet")
+            let prefix = std::env::var("OXIDLE_REDIS_PREFIX").unwrap_or_else(|_| "oxidle".into());
+            let r = store::redis::RedisStore::connect(uri, &prefix).await?;
+            tracing::info!("execution state: redis");
+            Arc::new(r)
         }
         None => sql.clone(),
     };

@@ -25,7 +25,7 @@ redis = { version = "1.8.1", features = ["tokio-comp", "connection-manager", "sc
 regex = "1.13.1"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.154", features = ["raw_value"] }
+serde_json = { version = "1.0.154", features = ["preserve_order", "raw_value"] }
 serde_json_canonicalizer = "0.4.1"
 sha1 = "0.11.0"
 sha2 = "0.11.1"
@@ -42,3 +42,10 @@ xxhash-rust = { version = "0.8.19", features = ["xxh64"] }
 
 [workspace]
 members = ["crates/*"]
+
+[profile.release]
+# Stripped proc-macro dylibs fail to load on recent macOS dyld; strip only the final binary manually if needed.
+strip = false
+
+[profile.release.build-override]
+strip = false

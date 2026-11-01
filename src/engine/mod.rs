@@ -76,14 +76,35 @@ impl Engine {
         sync::spawn(self.clone());
         let e = self.clone();
         tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_secs(30));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
             loop {
                 tick.tick().await;
-                if let Err(err) = e.state.gc(now_ms()).await {
+                let now = now_ms();
+                if let Err(err) = e.state.gc(now).await {
                     tracing::warn!(error = %err, "state gc failed");
                 }
-                if let Err(err) = e.registry.refresh_if_changed().await {
-                    tracing::warn!(error = %err, "registry refresh failed");
+                if e.cfg.retention_days > 0 {
+                    let before = now - e.cfg.retention_days as i64 * 86_400_000;
+                    if let Err(err) = e.meta.prune(before).await {
+                        tracing::warn!(error = %err, "history prune failed");
+                    }
+                }
+            }
+        });
+        // Pick up functions synced through other nodes.
+        let e = self.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(2));
+            loop {
+                tick.tick().await;
+                match e.registry.refresh_if_changed().await {
+                    Ok(true) => {
+                        if let Err(err) = e.ensure_crons().await {
+                            tracing::warn!(error = %err, "cron scheduling failed");
+                        }
+                    }
+                    Ok(false) => {}
+                    Err(err) => tracing::warn!(error = %err, "registry refresh failed"),
                 }
             }
         });

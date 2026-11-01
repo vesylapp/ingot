@@ -5,6 +5,7 @@
 #   BACKEND=redis ./e2e/run.sh
 #   ONLY=hello,steps ./e2e/run.sh
 #   TARGET=inngest ./e2e/run.sh  # run the same suite against the reference Go server
+#   BENCH=1 N=2000 ./e2e/run.sh  # throughput benchmark (works with TARGET/BACKEND too)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -82,6 +83,16 @@ until curl -sf "http://127.0.0.1:$APP_PORT/state" >/dev/null; do
   sleep 0.5
 done
 echo "app up"
+
+if [[ -n "${BENCH:-}" ]]; then
+  for kind in one three; do
+    docker exec -e KIND=$kind -e N="${N:-2000}" -e APP_URL="http://localhost:3939" \
+      -e INNGEST_DEV=0 -e INNGEST_BASE_URL="http://host.docker.internal:$PORT" \
+      -e INNGEST_SIGNING_KEY="$SIGNING_KEY" -e INNGEST_EVENT_KEY="$EVENT_KEY" \
+      oxidle-e2e-app node bench.mjs
+  done
+  exit 0
+fi
 
 set +e
 docker exec -e TARGET="$TARGET" -e ONLY="${ONLY:-}" -e CRON="${CRON:-}" -e APP_URL="http://localhost:3939" \

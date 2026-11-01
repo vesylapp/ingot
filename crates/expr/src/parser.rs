@@ -10,6 +10,11 @@ use std::sync::Arc;
 /// Maximum nesting depth of the resulting tree. Keeps lowering/evaluation
 /// recursion (and drop recursion) bounded.
 pub(crate) const MAX_DEPTH: u32 = 200;
+/// Maximum syntactic nesting (parentheses, brackets, call arguments, ternary
+/// branches). cel-go allows 250; real expressions nest a handful of levels,
+/// and this keeps parsing comfortably within small (2MB) thread stacks even in
+/// debug builds.
+pub(crate) const MAX_RECURSION: u32 = 64;
 /// Maximum source length in characters (cel-go's default code point limit).
 pub(crate) const MAX_SOURCE_CHARS: usize = 100_000;
 
@@ -492,9 +497,9 @@ impl Parser {
 
     fn expr(&mut self) -> Result<PExpr, String> {
         self.recursion += 1;
-        if self.recursion > MAX_DEPTH {
+        if self.recursion > MAX_RECURSION {
             return Err(format!(
-                "expression recursion exceeds the maximum depth of {MAX_DEPTH}"
+                "expression nesting exceeds the maximum depth of {MAX_RECURSION}"
             ));
         }
         let cond = self.or()?;

@@ -5,6 +5,7 @@
 //! * [`StateStore`] holds the hot execution state: the queue, run state, pauses and
 //!   flow-control bookkeeping. Implemented on SQL (default) or Redis.
 
+pub mod redis;
 pub mod sql;
 
 use crate::types::*;
@@ -64,6 +65,8 @@ pub trait MetaStore: Send + Sync {
     async fn get_run(&self, run_id: Ulid) -> Result<Option<RunRecord>>;
     async fn runs_for_event(&self, event_id: Ulid) -> Result<Vec<RunRecord>>;
     async fn list_runs(&self, q: &RunQuery) -> Result<Vec<RunRecord>>;
+    /// Delete events and finished run history older than `before` (ms).
+    async fn prune(&self, before: i64) -> Result<()>;
 }
 
 pub enum CreateRun {

@@ -20,6 +20,8 @@ pub struct SqlStore {
     pool: AnyPool,
     dialect: Dialect,
     seq: AtomicI64,
+    /// Finished run state older than this is pruned by `gc` (0 = keep forever).
+    retention_ms: AtomicI64,
 }
 
 /// How long completed job ids are remembered for enqueue dedup.
@@ -241,6 +243,7 @@ impl SqlStore {
             pool,
             dialect,
             seq: AtomicI64::new(0),
+            retention_ms: AtomicI64::new(0),
         };
         store.migrate().await?;
         Ok(store)
@@ -248,6 +251,10 @@ impl SqlStore {
 
     pub fn dialect(&self) -> Dialect {
         self.dialect
+    }
+
+    pub fn set_retention_ms(&self, ms: i64) {
+        self.retention_ms.store(ms, Ordering::Relaxed);
     }
 
     async fn migrate(&self) -> Result<()> {
@@ -663,6 +670,18 @@ impl MetaStore for SqlStore {
         .fetch_all(&self.pool)
         .await?;
         rows.iter().map(row_run).collect()
+    }
+
+    async fn prune(&self, before: i64) -> Result<()> {
+        sqlx::query("DELETE FROM events WHERE received_at < $1")
+            .bind(before)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM function_runs WHERE ended_at IS NOT NULL AND ended_at < $1")
+            .bind(before)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     async fn list_runs(&self, q: &RunQuery) -> Result<Vec<RunRecord>> {
@@ -1570,6 +1589,21 @@ impl StateStore for SqlStore {
     }
 
     async fn gc(&self, now: i64) -> Result<()> {
+        let retention = self.retention_ms.load(Ordering::Relaxed);
+        if retention > 0 {
+            let cutoff = now - retention;
+            sqlx::query(
+                "DELETE FROM run_steps WHERE run_id IN
+                 (SELECT run_id FROM run_state WHERE status <> 'Running' AND updated_at < $1)",
+            )
+            .bind(cutoff)
+            .execute(&self.pool)
+            .await?;
+            sqlx::query("DELETE FROM run_state WHERE status <> 'Running' AND updated_at < $1")
+                .bind(cutoff)
+                .execute(&self.pool)
+                .await?;
+        }
         sqlx::query("DELETE FROM queue_done WHERE expires_at < $1")
             .bind(now)
             .execute(&self.pool)

@@ -1,0 +1,202 @@
+{
+ "full": {
+  "event": {
+   "name": "app/user.created",
+   "ts": 1774512121538,
+   "id": "01KMMJM9P2JQWH09SKMQM4J1DF",
+   "user": {},
+   "data": {
+    "n": 5,
+    "f": 1.5,
+    "zero": 0,
+    "fzero": 0.0,
+    "s": "hi",
+    "empty": "",
+    "nul": null,
+    "list": [
+     1,
+     "a",
+     null,
+     {
+      "k": 1
+     }
+    ],
+    "obj": {
+     "b": 2,
+     "a": "x"
+    },
+    "items": [
+     {
+      "name": "a",
+      "qty": 2
+     },
+     {
+      "name": "b",
+      "qty": 0
+     }
+    ],
+    "emptylist": [],
+    "emptyobj": {},
+    "big": 1234567,
+    "t": true,
+    "fl": false,
+    "tags": [
+     "x",
+     "y"
+    ],
+    "nums": [
+     1,
+     2,
+     3
+    ],
+    "userId": "u1",
+    "amount": 150,
+    "plan": "pro",
+    "title": "nope",
+    "action": "opened",
+    "status": "200",
+    "encoded": "eyJuZXN0ZWQiOnsiZGF0YSI6InllYSJ9fQ==",
+    "from": "2020-01-01T12:00:00",
+    "priority": "p1",
+    "neg": -3,
+    "huge": 1e+300,
+    "date": "2024-05-01T10:00:00Z",
+    "user": {
+     "email": "a@example.com",
+     "active": true,
+     "name": "alice",
+     "role": "admin"
+    },
+    "issue": null
+   }
+  },
+  "async": {
+   "name": "app/user.updated",
+   "ts": 1774512122000,
+   "id": "01KMMJM9P2JQWH09SKMQM4J1DG",
+   "user": {},
+   "data": {
+    "userId": "u1",
+    "billing_plan": "enterprise",
+    "n": 5.0,
+    "status": "200",
+    "s": "hi"
+   }
+  }
+ },
+ "ev": {
+  "event": {
+   "name": "app/user.created",
+   "ts": 1774512121538,
+   "id": "01KMMJM9P2JQWH09SKMQM4J1DF",
+   "user": {},
+   "data": {
+    "n": 5,
+    "f": 1.5,
+    "zero": 0,
+    "fzero": 0.0,
+    "s": "hi",
+    "empty": "",
+    "nul": null,
+    "list": [
+     1,
+     "a",
+     null,
+     {
+      "k": 1
+     }
+    ],
+    "obj": {
+     "b": 2,
+     "a": "x"
+    },
+    "items": [
+     {
+      "name": "a",
+      "qty": 2
+     },
+     {
+      "name": "b",
+      "qty": 0
+     }
+    ],
+    "emptylist": [],
+    "emptyobj": {},
+    "big": 1234567,
+    "t": true,
+    "fl": false,
+    "tags": [
+     "x",
+     "y"
+    ],
+    "nums": [
+     1,
+     2,
+     3
+    ],
+    "userId": "u1",
+    "amount": 150,
+    "plan": "pro",
+    "title": "nope",
+    "action": "opened",
+    "status": "200",
+    "encoded": "eyJuZXN0ZWQiOnsiZGF0YSI6InllYSJ9fQ==",
+    "from": "2020-01-01T12:00:00",
+    "priority": "p1",
+    "neg": -3,
+    "huge": 1e+300,
+    "date": "2024-05-01T10:00:00Z",
+    "user": {
+     "email": "a@example.com",
+     "active": true,
+     "name": "alice",
+     "role": "admin"
+    },
+    "issue": null
+   }
+  }
+ },
+ "empty": {
+  "event": {
+   "data": {}
+  }
+ },
+ "none": {},
+ "asynconly": {
+  "async": {
+   "name": "app/user.updated",
+   "ts": 1774512122000,
+   "id": "01KMMJM9P2JQWH09SKMQM4J1DG",
+   "user": {},
+   "data": {
+    "userId": "u1",
+    "billing_plan": "enterprise",
+    "n": 5.0,
+    "status": "200",
+    "s": "hi"
+   }
+  }
+ },
+ "nulls": {
+  "event": {
+   "data": {
+    "a": null,
+    "b": null,
+    "user": null,
+    "items": null
+   }
+  }
+ },
+ "strs": {
+  "event": {
+   "data": {
+    "a": "first",
+    "b": "second",
+    "c": "",
+    "user": {},
+    "list": [],
+    "items": []
+   }
+  }
+ }
+}

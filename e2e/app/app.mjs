@@ -14,6 +14,7 @@ const state = {
   failures: [],
   events: {},
   results: {},
+  bench: { done: 0, first: 0, last: 0 },
 };
 const bump = (obj, key) => (obj[key] = (obj[key] || 0) + 1);
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -173,12 +174,12 @@ const fns = [
 
   create(
     { id: "batched", batchEvents: { maxSize: 3, timeout: "5s" }, triggers: [{ event: "e2e/batched" }] },
-    async ({ events }) => ({ count: events.length, seqs: events.map((e) => e.data.seq) }),
+    async ({ events }) => ({ tag: events[0].data.tag, count: events.length, seqs: events.map((e) => e.data.seq) }),
   ),
 
   create(
     { id: "batch-timeout", batchEvents: { maxSize: 100, timeout: "2s" }, triggers: [{ event: "e2e/batch-timeout" }] },
-    async ({ events }) => ({ count: events.length }),
+    async ({ events }) => ({ tag: events[0].data.tag, count: events.length }),
   ),
 
   create(
@@ -241,6 +242,23 @@ const fns = [
     return { sum };
   }),
 
+  inngest.createFunction({ id: "bench-1", triggers: [{ event: "bench/one" }] }, async () => {
+    const b = state.bench;
+    b.done++;
+    b.last = Date.now();
+    return 1;
+  }),
+
+  inngest.createFunction({ id: "bench-3", triggers: [{ event: "bench/three" }] }, async ({ step }) => {
+    const a = await step.run("a", () => 1);
+    const b2 = await step.run("b", () => a + 1);
+    const c = await step.run("c", () => b2 + 1);
+    const b = state.bench;
+    b.done++;
+    b.last = Date.now();
+    return c;
+  }),
+
   create({ id: "cron-fn", triggers: [{ cron: "* * * * *" }] }, async ({ event }) => {
     state.events.cron = event.data.scheduledAt || true;
     return "tick";
@@ -251,5 +269,10 @@ const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use("/api/inngest", serve({ client: inngest, functions: fns }));
 app.get("/state", (_req, res) => res.json(state));
+app.post("/bench/reset", (_req, res) => {
+  state.bench = { done: 0, first: Date.now(), last: 0 };
+  res.json(state.bench);
+});
+app.get("/bench", (_req, res) => res.json(state.bench));
 const port = Number(process.env.PORT || 3939);
 app.listen(port, () => console.log(`e2e app listening on ${port}`));
