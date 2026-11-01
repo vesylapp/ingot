@@ -1,0 +1,1 @@
+[2m2026-11-01T14:14:21.233637Z[0m [33m WARN[0m [2moxidle::api[0m[2m:[0m dashboard UI assets not found (build them with ./ui/build.sh or set --ui-dir)

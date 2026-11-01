@@ -14,9 +14,16 @@ const state = {
   failures: [],
   events: {},
   results: {},
-  bench: { done: 0, first: 0, last: 0 },
+  bench: { done: 0, first: 0, last: 0, lat: [] },
 };
 const bump = (obj, key) => (obj[key] = (obj[key] || 0) + 1);
+// Each bench event carries its send time (data.t), so completions give end-to-end latency.
+function benchDone(event) {
+  const b = state.bench;
+  b.done++;
+  b.last = Date.now();
+  if (event.data.t) b.lat.push(b.last - event.data.t);
+}
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function tracked(group, fn) {
@@ -242,20 +249,16 @@ const fns = [
     return { sum };
   }),
 
-  inngest.createFunction({ id: "bench-1", triggers: [{ event: "bench/one" }] }, async () => {
-    const b = state.bench;
-    b.done++;
-    b.last = Date.now();
+  inngest.createFunction({ id: "bench-1", triggers: [{ event: "bench/one" }] }, async ({ event }) => {
+    benchDone(event);
     return 1;
   }),
 
-  inngest.createFunction({ id: "bench-3", triggers: [{ event: "bench/three" }] }, async ({ step }) => {
+  inngest.createFunction({ id: "bench-3", triggers: [{ event: "bench/three" }] }, async ({ event, step }) => {
     const a = await step.run("a", () => 1);
     const b2 = await step.run("b", () => a + 1);
     const c = await step.run("c", () => b2 + 1);
-    const b = state.bench;
-    b.done++;
-    b.last = Date.now();
+    benchDone(event);
     return c;
   }),
 
@@ -270,9 +273,14 @@ app.use(express.json({ limit: "50mb" }));
 app.use("/api/inngest", serve({ client: inngest, functions: fns }));
 app.get("/state", (_req, res) => res.json(state));
 app.post("/bench/reset", (_req, res) => {
-  state.bench = { done: 0, first: Date.now(), last: 0 };
+  state.bench = { done: 0, first: Date.now(), last: 0, lat: [] };
   res.json(state.bench);
 });
-app.get("/bench", (_req, res) => res.json(state.bench));
+app.get("/bench", (_req, res) => {
+  const { lat, ...b } = state.bench;
+  const sorted = [...lat].sort((x, y) => x - y);
+  const pct = (q) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] : null);
+  res.json({ ...b, p50: pct(0.5), p95: pct(0.95), p99: pct(0.99), max: sorted.at(-1) ?? null });
+});
 const port = Number(process.env.PORT || 3939);
 app.listen(port, () => console.log(`e2e app listening on ${port}`));

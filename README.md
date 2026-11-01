@@ -17,6 +17,10 @@ cargo build --release
 
 # Development mode (no keys required, server kind "dev")
 ./target/release/oxidle dev
+
+# Or as a container (same arguments)
+docker build -t oxidle .
+docker run -p 8288:8288 -v oxidle-data:/data oxidle start --event-key ... --signing-key ...
 ```
 
 Point your app at it exactly as you would a self-hosted Inngest:
@@ -34,6 +38,10 @@ Send events with the SDK (`inngest.send(...)`) or plain HTTP:
 curl -X POST http://localhost:8288/e/my-event-key -d '{"name":"app/user.created","data":{"id":1}}'
 # {"ids":["01J..."],"status":200}
 ```
+
+## Performance
+
+PERF_PLACEHOLDER
 
 ## Dashboard
 
@@ -118,7 +126,8 @@ OXIDLE_TEST_REDIS=redis://127.0.0.1:6379 cargo test --test state_store   # + Red
 BACKEND=postgres ./e2e/run.sh    # ... Postgres
 BACKEND=redis ./e2e/run.sh       # ... Redis
 TARGET=inngest ./e2e/run.sh      # same suite against the official inngest/inngest image
-BENCH=1 N=2000 ./e2e/run.sh      # throughput benchmark (combine with BACKEND/TARGET)
+BENCH=1 N=2000 ./e2e/run.sh      # quick throughput check (combine with BACKEND/TARGET)
+./bench/matrix.sh                # full oxidle-vs-Inngest benchmark matrix (Docker), see docs/benchmarks.md
 KEEP=1 ./e2e/run.sh              # leave server + app running to explore the dashboard
 ```
 
@@ -137,5 +146,6 @@ src/
 crates/expr/  Inngest-dialect CEL engine
 e2e/          JS SDK test app, test runner, benchmark
 ui/build.sh   builds Inngest's dashboard UI into ui/dist
+bench/        benchmark matrix (matrix.sh) and chart/table generator (report.py)
 docs/spec/    wire/behavior spec extracted from the reference implementation
 ```
