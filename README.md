@@ -30,6 +30,11 @@ Multi-arch images (linux/amd64, linux/arm64) are published to GitHub Container R
 | `:1.2.3`, `:1.2`, `:1` | pushing a `v1.2.3` tag (`:1` is skipped for `v0.x`) |
 | `:sha-<short>` | every published build, for pinning |
 
+To release, run `just bump` (patch), `just bump --minor` or `just bump --major` on a clean
+`main`. It updates the version in `Cargo.toml` (zeroing the lower parts on a minor or major
+bump, so 0.1.13 → 0.2.0), builds, commits, then pushes the commit and a `vX.Y.Z` tag, which
+publishes the versioned image.
+
 ```sh
 docker run -p 8288:8288 -v oxidle-data:/data ghcr.io/benwyrosdick/oxidle:latest \
   start --event-key my-event-key --signing-key 8b1d8a3c4f0e...
