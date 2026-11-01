@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 496" width="680" height="496" role="img" aria-label="Throughput">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 600" width="680" height="600" role="img" aria-label="Throughput">
 <style>
   svg { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
   .surface { fill: #fcfcfb; }
@@ -12,7 +12,7 @@
     .grid { stroke: #2c2c2a; } .axis { stroke: #383835; }
   }
 </style>
-<rect class="surface" width="680" height="496" rx="8"/>
+<rect class="surface" width="680" height="600" rx="8"/>
 <text class="t1" x="24" y="34" font-size="17" font-weight="600">Throughput</text>
 <text class="t2" x="24" y="56" font-size="13">Completed function runs per second, 2,000-event burst (higher is better)</text>
 <rect class="s1" x="24" y="68" width="12" height="12" rx="3"/>
@@ -20,59 +20,69 @@
 <rect class="s2" x="140.4" y="68" width="12" height="12" rx="3"/>
 <text class="t2" x="158.4" y="78.5" font-size="13">Inngest 1.49.0</text>
 <text x="24" y="106" font-size="14"><tspan class="t1" font-weight="600">Function with no steps</tspan><tspan class="t3" dx="6">runs/s</tspan></text>
-<line class="axis" x1="92.0" x2="92.0" y1="120" y2="264" stroke-width="1"/>
-<text class="t3" x="92.0" y="280" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">0</text>
-<line class="grid" x1="196.8" x2="196.8" y1="120" y2="264" stroke-width="1"/>
-<text class="t3" x="196.8" y="280" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">500</text>
-<line class="grid" x1="301.6" x2="301.6" y1="120" y2="264" stroke-width="1"/>
-<text class="t3" x="301.6" y="280" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">1K</text>
-<line class="grid" x1="406.4" x2="406.4" y1="120" y2="264" stroke-width="1"/>
-<text class="t3" x="406.4" y="280" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">1.5K</text>
-<line class="grid" x1="511.2" x2="511.2" y1="120" y2="264" stroke-width="1"/>
-<text class="t3" x="511.2" y="280" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">2K</text>
-<line class="grid" x1="616.0" x2="616.0" y1="120" y2="264" stroke-width="1"/>
-<text class="t3" x="616.0" y="280" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">2.5K</text>
-<text class="t2" x="82" y="147.5" font-size="13" text-anchor="end">SQLite</text>
-<path class="s1" d="M92,126 h161.6 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-161.6 z"><title>oxidle 0.1.0 · SQLite: 790 runs/s</title></path>
-<text class="t1" x="263.6" y="138" font-size="12" style="font-variant-numeric: tabular-nums">790</text>
-<path class="s2" d="M92,144 h1.5 a1.5,1.5 0 0 1 1.5,1.5 v13.0 a1.5,1.5 0 0 1 -1.5,1.5 h-1.5 z"><title>Inngest 1.49.0 · SQLite: 10 runs/s</title></path>
-<text class="t1" x="101.0" y="156" font-size="12" style="font-variant-numeric: tabular-nums">10</text>
-<text class="t2" x="82" y="199.5" font-size="13" text-anchor="end">Postgres</text>
-<path class="s1" d="M92,178 h228.7 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-228.7 z"><title>oxidle 0.1.0 · Postgres: 1,110 runs/s</title></path>
-<text class="t1" x="330.7" y="190" font-size="12" style="font-variant-numeric: tabular-nums">1,110</text>
-<path class="s2" d="M92,196 h57.6 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-57.6 z"><title>Inngest 1.49.0 · Postgres: 294 runs/s</title></path>
-<text class="t1" x="159.6" y="208" font-size="12" style="font-variant-numeric: tabular-nums">294</text>
-<text class="t2" x="82" y="251.5" font-size="13" text-anchor="end">Redis</text>
-<path class="s1" d="M92,230 h398.6 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-398.6 z"><title>oxidle 0.1.0 · Redis: 1,921 runs/s</title></path>
-<text class="t1" x="500.6" y="242" font-size="12" style="font-variant-numeric: tabular-nums">1,921</text>
-<path class="s2" d="M92,248 h1.5 a1.5,1.5 0 0 1 1.5,1.5 v13.0 a1.5,1.5 0 0 1 -1.5,1.5 h-1.5 z"><title>Inngest 1.49.0 · Redis: 10 runs/s</title></path>
-<text class="t1" x="101.0" y="260" font-size="12" style="font-variant-numeric: tabular-nums">10</text>
-<text x="24" y="304" font-size="14"><tspan class="t1" font-weight="600">Function with 3 steps</tspan><tspan class="t3" dx="6">runs/s</tspan></text>
-<line class="axis" x1="92.0" x2="92.0" y1="318" y2="462" stroke-width="1"/>
-<text class="t3" x="92.0" y="478" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">0</text>
-<line class="grid" x1="196.8" x2="196.8" y1="318" y2="462" stroke-width="1"/>
-<text class="t3" x="196.8" y="478" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">250</text>
-<line class="grid" x1="301.6" x2="301.6" y1="318" y2="462" stroke-width="1"/>
-<text class="t3" x="301.6" y="478" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">500</text>
-<line class="grid" x1="406.4" x2="406.4" y1="318" y2="462" stroke-width="1"/>
-<text class="t3" x="406.4" y="478" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">750</text>
-<line class="grid" x1="511.2" x2="511.2" y1="318" y2="462" stroke-width="1"/>
-<text class="t3" x="511.2" y="478" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">1K</text>
-<line class="grid" x1="616.0" x2="616.0" y1="318" y2="462" stroke-width="1"/>
-<text class="t3" x="616.0" y="478" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">1.25K</text>
-<text class="t2" x="82" y="345.5" font-size="13" text-anchor="end">SQLite</text>
-<path class="s1" d="M92,324 h240.0 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-240.0 z"><title>oxidle 0.1.0 · SQLite: 582 runs/s</title></path>
-<text class="t1" x="342.0" y="336" font-size="12" style="font-variant-numeric: tabular-nums">582</text>
-<path class="s2" d="M92,342 h1.7 a1.6768,1.6768 0 0 1 1.6768,1.6768 v12.6464 a1.6768,1.6768 0 0 1 -1.6768,1.6768 h-1.7 z"><title>Inngest 1.49.0 · SQLite: 8 runs/s</title></path>
-<text class="t1" x="101.4" y="354" font-size="12" style="font-variant-numeric: tabular-nums">8</text>
-<text class="t2" x="82" y="397.5" font-size="13" text-anchor="end">Postgres</text>
-<path class="s1" d="M92,376 h287.8 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-287.8 z"><title>oxidle 0.1.0 · Postgres: 696 runs/s</title></path>
-<text class="t1" x="389.8" y="388" font-size="12" style="font-variant-numeric: tabular-nums">696</text>
-<path class="s2" d="M92,394 h80.7 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-80.7 z"><title>Inngest 1.49.0 · Postgres: 202 runs/s</title></path>
-<text class="t1" x="182.7" y="406" font-size="12" style="font-variant-numeric: tabular-nums">202</text>
-<text class="t2" x="82" y="449.5" font-size="13" text-anchor="end">Redis</text>
-<path class="s1" d="M92,428 h419.4 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-419.4 z"><title>oxidle 0.1.0 · Redis: 1,010 runs/s</title></path>
-<text class="t1" x="521.4" y="440" font-size="12" style="font-variant-numeric: tabular-nums">1,010</text>
-<path class="s2" d="M92,446 h1.9 a1.8864,1.8864 0 0 1 1.8864,1.8864 v12.2272 a1.8864,1.8864 0 0 1 -1.8864,1.8864 h-1.9 z"><title>Inngest 1.49.0 · Redis: 9 runs/s</title></path>
-<text class="t1" x="101.8" y="458" font-size="12" style="font-variant-numeric: tabular-nums">9</text>
+<line class="axis" x1="128.0" x2="128.0" y1="120" y2="316" stroke-width="1"/>
+<text class="t3" x="128.0" y="332" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">0</text>
+<line class="grid" x1="225.6" x2="225.6" y1="120" y2="316" stroke-width="1"/>
+<text class="t3" x="225.6" y="332" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">500</text>
+<line class="grid" x1="323.2" x2="323.2" y1="120" y2="316" stroke-width="1"/>
+<text class="t3" x="323.2" y="332" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">1K</text>
+<line class="grid" x1="420.8" x2="420.8" y1="120" y2="316" stroke-width="1"/>
+<text class="t3" x="420.8" y="332" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">1.5K</text>
+<line class="grid" x1="518.4" x2="518.4" y1="120" y2="316" stroke-width="1"/>
+<text class="t3" x="518.4" y="332" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">2K</text>
+<line class="grid" x1="616.0" x2="616.0" y1="120" y2="316" stroke-width="1"/>
+<text class="t3" x="616.0" y="332" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">2.5K</text>
+<text class="t2" x="118" y="147.5" font-size="13" text-anchor="end">SQLite</text>
+<path class="s1" d="M128,126 h150.2 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-150.2 z"><title>oxidle 0.1.0 · SQLite: 790 runs/s</title></path>
+<text class="t1" x="288.2" y="138" font-size="12" style="font-variant-numeric: tabular-nums">790</text>
+<path class="s2" d="M128,144 h1.5 a1.5,1.5 0 0 1 1.5,1.5 v13.0 a1.5,1.5 0 0 1 -1.5,1.5 h-1.5 z"><title>Inngest 1.49.0 · SQLite: 10 runs/s</title></path>
+<text class="t1" x="137.0" y="156" font-size="12" style="font-variant-numeric: tabular-nums">10</text>
+<text class="t2" x="118" y="199.5" font-size="13" text-anchor="end">Postgres</text>
+<path class="s1" d="M128,178 h212.7 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-212.7 z"><title>oxidle 0.1.0 · Postgres: 1,110 runs/s</title></path>
+<text class="t1" x="350.7" y="190" font-size="12" style="font-variant-numeric: tabular-nums">1,110</text>
+<path class="s2" d="M128,196 h53.4 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-53.4 z"><title>Inngest 1.49.0 · Postgres: 294 runs/s</title></path>
+<text class="t1" x="191.4" y="208" font-size="12" style="font-variant-numeric: tabular-nums">294</text>
+<text class="t2" x="118" y="251.5" font-size="13" text-anchor="end">Redis</text>
+<path class="s1" d="M128,230 h371.0 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-371.0 z"><title>oxidle 0.1.0 · Redis: 1,921 runs/s</title></path>
+<text class="t1" x="509.0" y="242" font-size="12" style="font-variant-numeric: tabular-nums">1,921</text>
+<path class="s2" d="M128,248 h1.5 a1.5,1.5 0 0 1 1.5,1.5 v13.0 a1.5,1.5 0 0 1 -1.5,1.5 h-1.5 z"><title>Inngest 1.49.0 · Redis: 10 runs/s</title></path>
+<text class="t1" x="137.0" y="260" font-size="12" style="font-variant-numeric: tabular-nums">10</text>
+<text class="t2" x="118" y="303.5" font-size="13" text-anchor="end">Redis + Postgres</text>
+<path class="s1" d="M128,282 h366.5 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-366.5 z"><title>oxidle 0.1.0 · Redis + Postgres: 1,898 runs/s</title></path>
+<text class="t1" x="504.5" y="294" font-size="12" style="font-variant-numeric: tabular-nums">1,898</text>
+<path class="s2" d="M128,300 h63.5 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-63.5 z"><title>Inngest 1.49.0 · Redis + Postgres: 346 runs/s</title></path>
+<text class="t1" x="201.5" y="312" font-size="12" style="font-variant-numeric: tabular-nums">346</text>
+<text x="24" y="356" font-size="14"><tspan class="t1" font-weight="600">Function with 3 steps</tspan><tspan class="t3" dx="6">runs/s</tspan></text>
+<line class="axis" x1="128.0" x2="128.0" y1="370" y2="566" stroke-width="1"/>
+<text class="t3" x="128.0" y="582" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">0</text>
+<line class="grid" x1="225.6" x2="225.6" y1="370" y2="566" stroke-width="1"/>
+<text class="t3" x="225.6" y="582" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">250</text>
+<line class="grid" x1="323.2" x2="323.2" y1="370" y2="566" stroke-width="1"/>
+<text class="t3" x="323.2" y="582" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">500</text>
+<line class="grid" x1="420.8" x2="420.8" y1="370" y2="566" stroke-width="1"/>
+<text class="t3" x="420.8" y="582" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">750</text>
+<line class="grid" x1="518.4" x2="518.4" y1="370" y2="566" stroke-width="1"/>
+<text class="t3" x="518.4" y="582" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">1K</text>
+<line class="grid" x1="616.0" x2="616.0" y1="370" y2="566" stroke-width="1"/>
+<text class="t3" x="616.0" y="582" font-size="11" text-anchor="middle" style="font-variant-numeric: tabular-nums">1.25K</text>
+<text class="t2" x="118" y="397.5" font-size="13" text-anchor="end">SQLite</text>
+<path class="s1" d="M128,376 h223.2 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-223.2 z"><title>oxidle 0.1.0 · SQLite: 582 runs/s</title></path>
+<text class="t1" x="361.2" y="388" font-size="12" style="font-variant-numeric: tabular-nums">582</text>
+<path class="s2" d="M128,394 h1.6 a1.5616,1.5616 0 0 1 1.5616,1.5616 v12.8768 a1.5616,1.5616 0 0 1 -1.5616,1.5616 h-1.6 z"><title>Inngest 1.49.0 · SQLite: 8 runs/s</title></path>
+<text class="t1" x="137.1" y="406" font-size="12" style="font-variant-numeric: tabular-nums">8</text>
+<text class="t2" x="118" y="449.5" font-size="13" text-anchor="end">Postgres</text>
+<path class="s1" d="M128,428 h267.7 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-267.7 z"><title>oxidle 0.1.0 · Postgres: 696 runs/s</title></path>
+<text class="t1" x="405.7" y="440" font-size="12" style="font-variant-numeric: tabular-nums">696</text>
+<path class="s2" d="M128,446 h74.9 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-74.9 z"><title>Inngest 1.49.0 · Postgres: 202 runs/s</title></path>
+<text class="t1" x="212.9" y="458" font-size="12" style="font-variant-numeric: tabular-nums">202</text>
+<text class="t2" x="118" y="501.5" font-size="13" text-anchor="end">Redis</text>
+<path class="s1" d="M128,480 h390.3 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-390.3 z"><title>oxidle 0.1.0 · Redis: 1,010 runs/s</title></path>
+<text class="t1" x="528.3" y="492" font-size="12" style="font-variant-numeric: tabular-nums">1,010</text>
+<path class="s2" d="M128,498 h1.8 a1.7568000000000001,1.7568000000000001 0 0 1 1.7568000000000001,1.7568000000000001 v12.4864 a1.7568000000000001,1.7568000000000001 0 0 1 -1.7568000000000001,1.7568000000000001 h-1.8 z"><title>Inngest 1.49.0 · Redis: 9 runs/s</title></path>
+<text class="t1" x="137.5" y="510" font-size="12" style="font-variant-numeric: tabular-nums">9</text>
+<text class="t2" x="118" y="553.5" font-size="13" text-anchor="end">Redis + Postgres</text>
+<path class="s1" d="M128,532 h291.9 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-291.9 z"><title>oxidle 0.1.0 · Redis + Postgres: 758 runs/s</title></path>
+<text class="t1" x="429.9" y="544" font-size="12" style="font-variant-numeric: tabular-nums">758</text>
+<path class="s2" d="M128,550 h83.1 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-83.1 z"><title>Inngest 1.49.0 · Redis + Postgres: 223 runs/s</title></path>
+<text class="t1" x="221.1" y="562" font-size="12" style="font-variant-numeric: tabular-nums">223</text>
 </svg>

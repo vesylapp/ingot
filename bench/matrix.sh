@@ -7,7 +7,9 @@
 #
 # Knobs: N (events per throughput run), REPS, RATE/DURATION (latency runs), INNGEST_IMAGE,
 # SPECS (sessions separated by "|", e.g. "throughput:one|latency:three"),
-# OXIDLE_IMAGE (built from ./Dockerfile unless SKIP_BUILD=1), SERVER_ARGS (extra flags for both servers), OUT.
+# OXIDLE_IMAGE (built from ./Dockerfile unless SKIP_BUILD=1), SERVER_ARGS (extra flags for both servers),
+# SERVER_DOCKER_ARGS (extra `docker run` flags for the server, e.g. "--tmpfs /tmp/db"), OUT.
+# BACKENDS may also include redis-postgres (queue/state in Redis, history in Postgres).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -32,7 +34,7 @@ teardown() {
   [[ -n "${SAMPLER:-}" ]] && kill "$SAMPLER" 2>/dev/null || true
   [[ -n "${CELL:-}" ]] && docker logs bench-server >"${OUT%.jsonl}-$CELL.log" 2>&1 || true
   CELL=
-  docker rm -f bench-app bench-server bench-db >/dev/null 2>&1 || true
+  docker rm -f bench-app bench-server bench-db bench-pg >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
 }
 trap teardown EXIT
@@ -86,12 +88,19 @@ for target in $TARGETS; do
         sleep 1
         args+=(--redis-uri redis://bench-db:6379)
         workers+=(bench-db) ;;
+      redis-postgres)
+        docker run -d --name bench-db --network "$NET" redis:7-alpine >/dev/null
+        docker run -d --name bench-pg --network "$NET" -e POSTGRES_PASSWORD=pw postgres:16-alpine >/dev/null
+        until docker exec bench-pg pg_isready -U postgres >/dev/null 2>&1; do sleep 0.5; done
+        sleep 1
+        args+=(--redis-uri redis://bench-db:6379 --postgres-uri postgres://postgres:pw@bench-pg:5432/postgres)
+        workers+=(bench-db bench-pg) ;;
     esac
     if [[ "$target" == inngest ]]; then
-      docker run -d --name bench-server --network "$NET" ${SERVER_ENV:-} "$INNGEST_IMAGE" inngest "${args[@]}" >/dev/null
+      docker run -d --name bench-server --network "$NET" ${SERVER_ENV:-} ${SERVER_DOCKER_ARGS:-} "$INNGEST_IMAGE" inngest "${args[@]}" >/dev/null
       version=$(docker exec bench-server inngest version 2>/dev/null | head -1)
     else
-      docker run -d --name bench-server --network "$NET" -e RUST_LOG=oxidle=warn "$OXIDLE_IMAGE" "${args[@]}" >/dev/null
+      docker run -d --name bench-server --network "$NET" -e RUST_LOG=oxidle=warn ${SERVER_DOCKER_ARGS:-} "$OXIDLE_IMAGE" "${args[@]}" >/dev/null
       version=$(docker exec bench-server oxidle --version | awk '{print $2}')
     fi
     docker run -d --name bench-app --network "$NET" -v "$PWD/e2e/app:/app" -w /app \

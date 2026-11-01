@@ -22,6 +22,8 @@ Medians of 3 repetitions. Throughput runs send 2,000 events in batches of 200.
 | Postgres | 3 steps | 696 | 202 | **3.4×** |
 | Redis | no steps | 1,921 | 10 | **192×** |
 | Redis | 3 steps | 1,010 | 9 | **112×** |
+| Redis + Postgres | no steps | 1,898 | 346 | **5.5×** |
+| Redis + Postgres | 3 steps | 758 | 223 | **3.4×** |
 
 ### Latency at light load (ms, lower is better)
 
@@ -35,6 +37,8 @@ Event sent → last step of a 3-step function finished, 100 events sent one at a
 | Postgres | Inngest 1.49.0 | 239 | 394 | 416 |
 | Redis | oxidle 0.1.0 | 15 | 22 | 26 |
 | Redis | Inngest 1.49.0 | 304 | 493 | 707 |
+| Redis + Postgres | oxidle 0.1.0 | 22 | 31 | 37 |
+| Redis + Postgres | Inngest 1.49.0 | 241 | 388 | 424 |
 
 ### Resource use
 
@@ -48,6 +52,8 @@ CPU is the total CPU time spent by the server container plus the database contai
 | Postgres | Inngest 1.49.0 | 31.91 | 320 |
 | Redis | oxidle 0.1.0 | 0.80 | 44 |
 | Redis | Inngest 1.49.0 | 26.59 | 326 |
+| Redis + Postgres | oxidle 0.1.0 | 1.41 | 43 |
+| Redis + Postgres | Inngest 1.49.0 | 29.23 | 165 |
 <!-- results:end -->
 
 ## What is measured
@@ -82,9 +88,12 @@ The servers split storage differently, so the same flag means slightly different
 | `sqlite` | everything in SQLite (`--sqlite-dir`) | history in SQLite; queue and run state in its built-in in-memory Redis |
 | `postgres` | everything in Postgres (`--postgres-uri`) | history in Postgres; queue and run state in its built-in in-memory Redis |
 | `redis` | queue and run state in Redis (`--redis-uri`); history in SQLite | queue and run state in Redis (`--redis-uri`); history in SQLite |
+| `redis-postgres` | queue and run state in Redis; history in Postgres | queue and run state in Redis; history in Postgres (Inngest's recommended production setup) |
 
 Both servers otherwise run with default settings. Postgres 16 and Redis 7 run in their own
-containers and are counted in the CPU figures.
+containers and are counted in the CPU figures. SQLite files live on the container's own
+filesystem, where a synced 4 KB write takes about 0.6 ms on this machine; that matters for
+Inngest (see below).
 
 ## Environment
 
@@ -99,16 +108,38 @@ containers and are counted in the CPU figures.
 ## About the Inngest numbers
 
 **SQLite is Inngest's bottleneck.** On the SQLite and Redis rows Inngest manages about 10 runs/s;
-on Postgres it reaches about 300. The Redis row is slow too because `--redis-uri` only moves the
-queue and run state: Inngest still writes history and traces to SQLite. Under load its logs fill
-with `error inserting span` / `error inserting trace run` errors (`context canceled`, tens of
-thousands per session) and `critical section took longer than boundary` warnings, where scheduling
-a single event took up to several seconds while waiting on SQLite. oxidle writes run timelines
-through a batched background writer rather than on the execution path, which is part of why its
-SQLite numbers stay close to the other backends.
+with Postgres anywhere in the picture it reaches 200–350.
 
-Before finding that, these settings were tried on the SQLite configuration (300–500 event bursts,
-no-steps function); none of them help, because none of them touch the SQLite writes:
+- *Redis is really in use on the Redis row.* Inngest logs `using external redis`, and the external
+  Redis held about 5,000 keys during the run. But `--redis-uri` only moves the queue and run
+  state; the database for history and traces is chosen separately and is SQLite unless
+  `--postgres-uri` is set. So the Redis row still writes every trace span and history row to
+  SQLite, and is limited by the same thing as the SQLite row.
+- *The cost is fsync.* Inngest opens SQLite with only `cache=shared`: rollback journal (no WAL),
+  full sync on every commit, no busy timeout, and the pure-Go SQLite driver. Moving the same
+  SQLite file to RAM (`--tmpfs`) takes it from about 10 to about 300 runs/s:
+
+  | Inngest 1.49.0, 1,000-event burst | no steps | 3 steps |
+  |---|--:|--:|
+  | SQLite, on disk (default) | 10 | 8 |
+  | SQLite in RAM (`--tmpfs`) | 306 | 270 |
+  | Redis + SQLite in RAM | 408 | 308 |
+  | Redis + Postgres | 339 | 226 |
+
+  Under load its logs fill with `error inserting span` / `error inserting trace run` errors
+  (`context canceled`, tens of thousands per session) and `critical section took longer than
+  boundary` warnings, where scheduling a single event waited seconds on SQLite. On a disk with
+  faster fsync than this VM's the SQLite rows would improve, but it remains the bottleneck.
+
+oxidle opens SQLite in WAL mode with `synchronous=NORMAL` and writes run timelines through a
+batched background writer, so fsync barely matters to it: the same RAM-disk test moves it from
+790 to 923 runs/s (no steps). Its SQLite rows trail Postgres for a different reason: SQLite allows
+one writer at a time, and oxidle keeps queue, run state and history in that one file, so every
+write takes the same lock (`BEGIN IMMEDIATE`). Postgres lets workers write different rows
+concurrently, and Redis keeps the hot queue/state path out of SQL entirely.
+
+Before finding the fsync cause, these settings were tried on the SQLite configuration (300–500
+event bursts, no-steps function); none help, because none touch the SQLite writes:
 
 | Inngest configuration (SQLite) | runs/s |
 |---|--:|
@@ -122,7 +153,7 @@ no-steps function); none of them help, because none of them touch the SQLite wri
 **Postgres needs a bigger idle pool.** With the default `--postgres-max-idle-conns 10` (of 100
 open), Inngest keeps opening and closing Postgres connections under load until the container runs
 out of local ports (`connect: cannot assign requested address`); that caused one slow repetition
-(34 runs/s) in the results above. Raising the idle pool fixes it. The same flag, given to both
+in each Postgres configuration above (34 and 31 runs/s, 3 steps). The medians are unaffected. Raising the idle pool fixes it. The same flag, given to both
 servers (2 repetitions each):
 
 | `--postgres-max-idle-conns 100` | no steps | 3 steps |
@@ -132,7 +163,8 @@ servers (2 repetitions each):
 
 So on a tuned Postgres setup oxidle is roughly 2× faster; on the defaults, and on any setup that
 keeps SQLite, the gap is much larger. Memory is a consistent difference either way: Inngest's
-server holds 320–380 MB at peak, oxidle under 50 MB.
+server peaks at 320–380 MB with its built-in Redis and 165 MB with external Redis; oxidle stays
+under 50 MB in every configuration.
 
 These are numbers for the single-node self-hosted server. Inngest Cloud is a different,
 horizontally scaled deployment and is not measured here.

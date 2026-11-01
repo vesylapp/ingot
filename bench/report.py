@@ -17,8 +17,8 @@ OUT_DIR = ROOT / "docs" / "benchmarks"
 DOC = ROOT / "docs" / "benchmarks.md"
 
 TARGETS = ["oxidle", "inngest"]
-BACKENDS = ["sqlite", "postgres", "redis"]
-BACKEND_LABEL = {"sqlite": "SQLite", "postgres": "Postgres", "redis": "Redis"}
+BACKENDS = ["sqlite", "postgres", "redis", "redis-postgres"]
+BACKEND_LABEL = {"sqlite": "SQLite", "postgres": "Postgres", "redis": "Redis", "redis-postgres": "Redis + Postgres"}
 
 # Categorical slots 1-2 (validated light + dark), chart chrome and ink tokens.
 STYLE = """
@@ -81,7 +81,7 @@ def fmt(v):
 
 def bar_chart(title, subtitle, panels, unit, labels, path):
     """Horizontal grouped bars: one group per backend, one bar per target, one panel per measure."""
-    W, left, right = 680, 92, 64
+    W, left, right = 680, 128, 64
     plot_w = W - left - right
     bar_h, gap, group_gap = 16, 2, 18
     group_h = len(TARGETS) * bar_h + (len(TARGETS) - 1) * gap
