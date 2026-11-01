@@ -75,8 +75,10 @@ volumes:
 
 Your app then uses `INNGEST_BASE_URL=http://inngest:8288` inside the Compose network. Without
 the Postgres/Redis variables oxidle uses SQLite in `/data`; mount a volume there to keep it.
-The image runs as a non-root user (uid 10001) and does not include the dashboard UI (see
-[Dashboard](#dashboard)). Build it locally with `docker build -t oxidle .`.
+The image runs as a non-root user (uid 10001), includes the dashboard (see
+[Dashboard](#dashboard)), and declares a Docker `HEALTHCHECK` that runs `oxidle healthcheck`, so
+Compose picks it up without extra configuration. Build it locally with `docker build -t oxidle .`
+(`--build-arg UI=false` leaves the dashboard out).
 
 GHCR makes a new package private by default. After the first publish, open the package's
 settings on GitHub and set its visibility to public, or log hosts in with
@@ -121,8 +123,10 @@ oxidle serves Inngest's own dashboard UI (runs, run timelines with steps/attempt
 events, apps, functions, rerun / rerun-from-step, cancel, invoke) backed by a compatible
 GraphQL API at `/v0/gql`.
 
-The UI is Inngest's code (SSPL-licensed), so it is not vendored here. Build it once from
-Inngest's repository at a pinned commit (uses bun inside Docker):
+The UI is Inngest's code (SSPL-licensed), so it is not vendored in this repository. The Docker
+image builds it from Inngest's repository at the commit in `ui/INNGEST_REF` and serves it
+automatically, with Inngest's license file next to it (`/usr/local/bin/ui/INNGEST-LICENSE.md`).
+To run the binary outside Docker with the dashboard, build it once (uses bun inside Docker):
 
 ```sh
 ./ui/build.sh                 # writes ui/dist
@@ -201,9 +205,19 @@ state, events and history; `--shutdown-timeout` / `OXIDLE_SHUTDOWN_TIMEOUT` (sec
 25) bounds the drain on SIGTERM; `--ui-dir` / `OXIDLE_UI_DIR` points at the built dashboard;
 `OXIDLE_REDIS_PREFIX` (default `oxidle`) namespaces Redis keys.
 
+`--json` or `LOG_HANDLER=json` writes one JSON object per line with Google Cloud Logging's
+fields, so GKE picks up each line's severity and summary:
+`{"time":"…Z","severity":"WARNING","level":"WARN","message":"…","target":"oxidle::…",…}`.
+Event fields (`run_id`, `function`, `error`, …) are top-level keys, as in Inngest's JSON logs, and
+`level` is kept for filters written against it.
+
 ## Running in production
 
-**Health.** `GET /health` is a liveness check (always 200 while the process runs, as in
+**Health.** `oxidle healthcheck` probes a running server from inside its container and exits
+non-zero on failure, so healthchecks don't need curl. It takes the same flags and defaults as
+`inngest alpha doctor healthcheck` (`--host 127.0.0.1`, `--port`/`INNGEST_PORT` 8288,
+`--timeout 5s`, `--verbose`), which also works as a command name, plus `--ready` to probe `/ready`
+instead of `/health`. `GET /health` is a liveness check (always 200 while the process runs, as in
 Inngest). `GET /ready` is a readiness check: 503 while shutting down, or when the database or
 the state store (Redis, if configured) doesn't answer a ping within 2 seconds, with the failing
 check named in the response. `oxidle_store_up{store="database"|"state"}` reports the same on

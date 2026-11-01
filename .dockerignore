@@ -1,6 +1,8 @@
 target
 .inngest
 ui
+!ui/INNGEST_REF
+!ui/build-ui.sh
 e2e
 docs
 bench

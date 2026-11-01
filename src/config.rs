@@ -27,6 +27,63 @@ pub enum Command {
     Start(ServerArgs),
     /// Run in development mode (no keys required, server kind "dev").
     Dev(ServerArgs),
+    /// Probe a running server's HTTP endpoint; exits non-zero on failure (container healthchecks).
+    Healthcheck(HealthcheckArgs),
+    /// Inngest's command path, `alpha doctor healthcheck`, for existing healthcheck configs.
+    #[command(hide = true)]
+    Alpha {
+        #[command(subcommand)]
+        command: AlphaCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AlphaCommand {
+    Doctor {
+        #[command(subcommand)]
+        command: DoctorCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DoctorCommand {
+    Healthcheck(HealthcheckArgs),
+}
+
+/// Same flags and defaults as `inngest alpha doctor healthcheck`, plus `--ready`.
+#[derive(Args, Debug, Clone)]
+pub struct HealthcheckArgs {
+    /// Server host.
+    #[arg(long, env = "INNGEST_HOST", default_value = "127.0.0.1")]
+    pub host: String,
+
+    /// Server port.
+    #[arg(short = 'p', long, env = "INNGEST_PORT", default_value_t = 8288)]
+    pub port: u16,
+
+    /// URL scheme: http or https.
+    #[arg(long, default_value = "http")]
+    pub scheme: String,
+
+    /// Probe timeout (e.g. 5s, 500ms).
+    #[arg(long, default_value = "5s")]
+    pub timeout: String,
+
+    /// Probe /ready (stores reachable, not shutting down) instead of /health (process up).
+    #[arg(long)]
+    pub ready: bool,
+
+    /// On failure, also print the response status and the start of the body.
+    #[arg(long)]
+    pub verbose: bool,
+
+    /// Accepted for compatibility; oxidle has no Connect gateway to probe.
+    #[arg(long, hide = true)]
+    pub skip_connect_gateway: bool,
+
+    /// Accepted for compatibility; oxidle has no Connect gateway to probe.
+    #[arg(long, hide = true)]
+    pub connect_gateway_port: Option<u16>,
 }
 
 #[derive(Args, Debug, Clone)]
