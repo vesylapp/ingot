@@ -135,6 +135,46 @@ As in the reference server, `/v0/gql` is unauthenticated — keep the port on a 
 Not backed by data yet: Insights (SQL), Sessions, Connect worker lists. The UI's "Send event"
 button posts with a placeholder event key, so it only works in `oxidle dev` mode.
 
+## Metrics
+
+`GET /metrics` serves Prometheus metrics on the main port. Like the reference server it is
+unauthenticated, so keep the port on a trusted network or restrict the path at your proxy.
+
+**Inngest-compatible** (same names and labels as `inngest start`, so existing scrape configs and
+dashboards keep working):
+
+| Metric | Type | Labels |
+|---|---|---|
+| `inngest_queue_depth` | gauge | — all queued items, including future and in-progress ones |
+| `inngest_function_run_scheduled_total` / `_started_total` | counter | `fn` |
+| `inngest_function_run_ended_total` | counter | `fn`, `status` (`completed`, `failed`, `cancelled`) |
+| `inngest_sdk_req_scheduled_total` / `_started_total` | counter | `fn` |
+| `inngest_sdk_req_ended_total` | counter | `fn`, `status` (`success`, `errored`, `failed`) |
+
+As in Inngest, the `_total` counters are only recorded when `INNGEST_EXPERIMENTAL_PROM_METRICS=1`.
+`fn` is the function slug (`<app>-<function>`). An SDK request is `errored` when it failed in a
+retryable way (including network errors) and `failed` when not; a step that throws is reported by
+the SDK as a normal response, so it counts as `success`, as in Inngest.
+
+**oxidle-specific** (always on):
+
+| Metric | Type | Labels |
+|---|---|---|
+| `oxidle_queue_ready_items` | gauge | — items due now and waiting for a worker |
+| `oxidle_queue_lag_seconds` | gauge | — age of the oldest due item (0 when none is waiting) |
+| `oxidle_queue_in_progress` | gauge | `kind` (`start`, `edge`, `sleep`, `pause`, `cron`, …) |
+| `oxidle_queue_items_processed_total` | counter | `kind`, `outcome` (`done`, `retry`, `delay`, `error`) |
+| `oxidle_sdk_request_duration_seconds` | histogram | `fn`, `status` |
+| `oxidle_function_run_duration_seconds` | histogram | `fn`, `status` — scheduled to ended, including sleeps and waits |
+| `oxidle_events_received_total` | counter | `source` (`api`, `internal`, `cron`) |
+| `oxidle_http_request_duration_seconds` | histogram | `method`, `route` (pattern, e.g. `/e/{key}`), `status` |
+| `oxidle_functions` | gauge | — functions currently registered |
+| `oxidle_build_info` | gauge | `version` |
+| `process_*` | various | standard process CPU, memory and file descriptors (Linux) |
+
+The queue gauges read the shared store, so every node reports the same value; use `max`, not
+`sum`, across nodes. Counters, histograms and `oxidle_queue_in_progress` are per node.
+
 ## Storage backends
 
 | Flags | Durable data (apps, functions, events, history) | Execution state (queue, runs, pauses, flow control) |
@@ -184,6 +224,7 @@ Implemented to the wire spec of the Go server and JS SDK (see `docs/spec/`):
 - **REST API**: `/v1/events`, `/v1/events/{id}`, `/v1/events/{id}/runs`, `/v1/runs/{id}`
   (GET/DELETE), `/v1/runs/{id}/jobs`, `/v1/apps/{app}/functions`, `/v1/signals`,
   `/v1/cancellations` (bulk cancel).
+- **Metrics**: `GET /metrics` with Inngest's metric names and labels (see [Metrics](#metrics)).
 
 Not yet implemented: Connect (WebSocket workers, port 8289), realtime (`/v1/realtime/*`),
 durable endpoints (`POST /v1/checkpoint`), and the `/v2` API.
@@ -203,7 +244,7 @@ BENCH=1 N=2000 ./e2e/run.sh      # quick throughput check (combine with BACKEND/
 KEEP=1 ./e2e/run.sh              # leave server + app running to explore the dashboard
 ```
 
-The e2e suite (32 scenarios covering every feature above) passes against the official
+The e2e suite (33 scenarios covering every feature above) passes against the official
 Inngest server, which validates the expectations, and against oxidle on all three backends.
 
 ## Architecture
@@ -215,6 +256,7 @@ src/
               SDK driver, pauses, finalize, cron, app sync, trace (run timelines)
   store/      MetaStore + StateStore traits; sql.rs (SQLite/Postgres), redis.rs
   function.rs SDK function config parsing/validation
+  metrics.rs  Prometheus metrics (GET /metrics)
 crates/expr/  Inngest-dialect CEL engine
 e2e/          JS SDK test app, test runner, benchmark
 ui/build.sh   builds Inngest's dashboard UI into ui/dist
