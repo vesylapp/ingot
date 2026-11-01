@@ -10,6 +10,44 @@ storage backend, using the same SDK app, the same workload and the same Docker n
 ## Results
 
 <!-- results:start -->
+Medians of 3 repetitions. Throughput runs send 2,000 events in batches of 200.
+
+### Throughput (runs/s, higher is better)
+
+| Backend | Function | oxidle 0.1.0 | Inngest 1.49.0 | oxidle advantage |
+|---|---|--:|--:|--:|
+| SQLite | no steps | 790 | 10 | **79×** |
+| SQLite | 3 steps | 582 | 8 | **73×** |
+| Postgres | no steps | 1,110 | 294 | **3.8×** |
+| Postgres | 3 steps | 696 | 202 | **3.4×** |
+| Redis | no steps | 1,921 | 10 | **192×** |
+| Redis | 3 steps | 1,010 | 9 | **112×** |
+
+### Latency at light load (ms, lower is better)
+
+Event sent → last step of a 3-step function finished, 100 events sent one at a time at a steady rate (so p99 is the slowest run).
+
+| Backend | Server | p50 | p95 | p99 |
+|---|---|--:|--:|--:|
+| SQLite | oxidle 0.1.0 | 18 | 29 | 41 |
+| SQLite | Inngest 1.49.0 | 325 | 507 | 689 |
+| Postgres | oxidle 0.1.0 | 37 | 49 | 55 |
+| Postgres | Inngest 1.49.0 | 239 | 394 | 416 |
+| Redis | oxidle 0.1.0 | 15 | 22 | 26 |
+| Redis | Inngest 1.49.0 | 304 | 493 | 707 |
+
+### Resource use
+
+CPU is the total CPU time spent by the server container plus the database container (Postgres/Redis), divided by runs completed, during the 3-step throughput run. Memory is the server container's peak anonymous (heap) memory; it excludes the database container.
+
+| Backend | Server | CPU per run (ms) | Peak server memory (MB) |
+|---|---|--:|--:|
+| SQLite | oxidle 0.1.0 | 1.53 | 49 |
+| SQLite | Inngest 1.49.0 | 38.18 | 378 |
+| Postgres | oxidle 0.1.0 | 4.81 | 44 |
+| Postgres | Inngest 1.49.0 | 31.91 | 320 |
+| Redis | oxidle 0.1.0 | 0.80 | 44 |
+| Redis | Inngest 1.49.0 | 26.59 | 326 |
 <!-- results:end -->
 
 ## What is measured
@@ -27,9 +65,10 @@ Three measurements per configuration:
   time from the first send to the last run completing, as seen by the app.
 - **Latency**: 100 events sent one at a time at 5 events/s, a rate both servers keep up with.
   Each event carries its send time, and the app records how long after that the function's last
-  step finished.
+  step finished. Latency is measured in its own session on a freshly started server, so it is not
+  affected by backlog left over from the throughput bursts.
 - **Resources**: CPU time read from each container's cgroup (`cpu.stat`) before and after a run,
-  and the server's peak anonymous memory (`memory.stat`) sampled every second.
+  and the server's peak anonymous memory (`memory.stat`) sampled every second across both sessions.
 
 A 200-event warm-up runs first and is not recorded. Each measurement is repeated three times and
 the median is reported.
@@ -59,41 +98,58 @@ containers and are counted in the CPU figures.
 
 ## About the Inngest numbers
 
-Inngest's throughput here is far below oxidle's, so the configuration was checked before
-publishing. Each change below was measured with a 300–500 event burst against the no-steps
-function:
+**SQLite is Inngest's bottleneck.** On the SQLite and Redis rows Inngest manages about 10 runs/s;
+on Postgres it reaches about 300. The Redis row is slow too because `--redis-uri` only moves the
+queue and run state: Inngest still writes history and traces to SQLite. Under load its logs fill
+with `error inserting span` / `error inserting trace run` errors (`context canceled`, tens of
+thousands per session) and `critical section took longer than boundary` warnings, where scheduling
+a single event took up to several seconds while waiting on SQLite. oxidle writes run timelines
+through a batched background writer rather than on the execution path, which is part of why its
+SQLite numbers stay close to the other backends.
 
-| Inngest configuration | runs/s |
+Before finding that, these settings were tried on the SQLite configuration (300–500 event bursts,
+no-steps function); none of them help, because none of them touch the SQLite writes:
+
+| Inngest configuration (SQLite) | runs/s |
 |---|--:|
 | defaults (v1.49.0) | 11 |
 | `--tick 10` (poll the queue every 10 ms instead of 150 ms) | 7–10 |
 | `--queue-workers 1000` (default 100) | 7–20 |
 | `EXPERIMENTAL_KEY_QUEUES_ENABLE=true` | 11 |
-| external Redis (`--redis-uri`) | 12 |
 | v1.30.0 | 13 |
 | v1.11.13 | 10 |
 
-None of these move it much, and CPU stays low (about 20 ms per run, well under one core in total),
-so the limit is in how the queue schedules runs rather than in CPU or storage. Idle latency tells
-the same story: a single run takes around 200 ms from event to completion on Inngest, against
-around 20 ms on oxidle. These are numbers for the single-node self-hosted server; Inngest Cloud
-runs a different, horizontally scaled deployment and is not measured here.
+**Postgres needs a bigger idle pool.** With the default `--postgres-max-idle-conns 10` (of 100
+open), Inngest keeps opening and closing Postgres connections under load until the container runs
+out of local ports (`connect: cannot assign requested address`); that caused one slow repetition
+(34 runs/s) in the results above. Raising the idle pool fixes it. The same flag, given to both
+servers (2 repetitions each):
 
-The server logs from each configuration are saved next to the raw results
-(`bench/results/matrix-<target>-<backend>.log`); the Inngest logs show no errors during the runs.
+| `--postgres-max-idle-conns 100` | no steps | 3 steps |
+|---|--:|--:|
+| oxidle 0.1.0 | 1,151–1,266 | 646–708 |
+| Inngest 1.49.0 | 523–524 | 376–390 |
+
+So on a tuned Postgres setup oxidle is roughly 2× faster; on the defaults, and on any setup that
+keeps SQLite, the gap is much larger. Memory is a consistent difference either way: Inngest's
+server holds 320–380 MB at peak, oxidle under 50 MB.
+
+These are numbers for the single-node self-hosted server. Inngest Cloud is a different,
+horizontally scaled deployment and is not measured here.
 
 ## Reproduce
 
 ```sh
-./bench/matrix.sh                             # full matrix, ~70 min (Inngest dominates)
+./bench/matrix.sh                             # full matrix, about an hour (Inngest dominates)
 TARGETS=oxidle BACKENDS=redis REPS=1 ./bench/matrix.sh   # a single cell
 python3 bench/report.py bench/results/<file>.jsonl     # regenerate charts + the tables above
 ```
 
 Knobs: `N` (events per throughput run), `REPS`, `RATE` / `DURATION` (latency run),
-`INNGEST_IMAGE`, `SERVER_ARGS` (extra flags for both servers), `SPECS`
-(e.g. `"throughput:one latency:three"`). The raw results behind this page are in
-`bench/results/matrix.jsonl`.
+`INNGEST_IMAGE`, `SERVER_ARGS` (extra flags for both servers), `SPECS` (sessions separated by
+`|`, each on a fresh server; default `"throughput:one throughput:three|latency:three"`). The raw results behind this page are in
+`bench/results/matrix.jsonl`; each run also saves the server logs next to its results file
+(`<name>-<target>-<backend>-<session>.log`, not committed).
 
 For a quicker check against a server running on the host, `BENCH=1 ./e2e/run.sh` runs the same
 throughput workload through the e2e harness.

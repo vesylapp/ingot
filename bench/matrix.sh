@@ -6,6 +6,7 @@
 #   TARGETS=oxidle BACKENDS=redis REPS=1 ./bench/matrix.sh
 #
 # Knobs: N (events per throughput run), REPS, RATE/DURATION (latency runs), INNGEST_IMAGE,
+# SPECS (sessions separated by "|", e.g. "throughput:one|latency:three"),
 # OXIDLE_IMAGE (built from ./Dockerfile unless SKIP_BUILD=1), SERVER_ARGS (extra flags for both servers), OUT.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -29,6 +30,8 @@ docker pull -q "$INNGEST_IMAGE" >/dev/null
 
 teardown() {
   [[ -n "${SAMPLER:-}" ]] && kill "$SAMPLER" 2>/dev/null || true
+  [[ -n "${CELL:-}" ]] && docker logs bench-server >"${OUT%.jsonl}-$CELL.log" 2>&1 || true
+  CELL=
   docker rm -f bench-app bench-server bench-db >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
 }
@@ -55,14 +58,18 @@ sample_mem() {
 }
 
 bench() { # mode kind
-  docker exec -e MODE="$1" -e KIND="$2" -e N="$N" -e RATE="$RATE" -e DURATION="$DURATION" \
+  docker exec -e MODE="$1" -e KIND="$2" -e N="$N" -e TIMEOUT_S="${TIMEOUT_S:-900}" -e RATE="$RATE" -e DURATION="$DURATION" \
     -e APP_URL=http://localhost:3939 -e INNGEST_DEV=0 -e INNGEST_BASE_URL=http://bench-server:8288 \
     -e INNGEST_SIGNING_KEY="signkey-test-$KEY" -e INNGEST_EVENT_KEY="$EVENT_KEY" \
     bench-app node bench.mjs
 }
 
+# Each session gets a freshly started server, so latency isn't skewed by backlog from the bursts.
+IFS='|' read -r -a SESSIONS <<<"${SPECS:-throughput:one throughput:three|latency:three}"
+
 for target in $TARGETS; do
   for backend in $BACKENDS; do
+   for specs in "${SESSIONS[@]}"; do
     teardown
     docker network create "$NET" >/dev/null
     args=(start --port 8288 --signing-key "$KEY" --event-key "$EVENT_KEY" --sqlite-dir /tmp/db ${SERVER_ARGS:-})
@@ -94,7 +101,8 @@ for target in $TARGETS; do
       node:22-alpine sh -c "npm install --silent --no-audit --no-fund && node app.mjs" >/dev/null
     until docker exec bench-app wget -qO- http://bench-server:8288/health >/dev/null 2>&1; do sleep 0.5; done
     until docker exec bench-app wget -qO- http://localhost:3939/state >/dev/null 2>&1; do sleep 0.5; done
-    echo "== $target ($version) backend=$backend"
+    echo "== $target ($version) backend=$backend: $specs"
+    CELL=$target-$backend-${specs%%:*}
 
     # Warm-up (not recorded): sync, JIT, connection pools.
     N=200 bench throughput one >/dev/null
@@ -104,7 +112,7 @@ for target in $TARGETS; do
     sample_mem "$memfile" &
     SAMPLER=$!
     for rep in $(seq 1 "$REPS"); do
-      for spec in ${SPECS:-"throughput:one" "throughput:three" "latency:three"}; do
+      for spec in $specs; do
         spec=${spec/:/ }
         set -- $spec
         c0=$(cpu_usec "${workers[@]}")
@@ -112,17 +120,18 @@ for target in $TARGETS; do
         c1=$(cpu_usec "${workers[@]}")
         echo "$line" | jq -c --arg t "$target" --arg b "$backend" --arg v "$version" \
           --argjson rep "$rep" --argjson cpu "$((c1 - c0))" \
-          '. + {target: $t, backend: $b, version: $v, rep: $rep, cpu_ms_per_run: (($cpu / 1000) / .done * 1000 | round / 1000)}' \
+          '. + {target: $t, backend: $b, version: $v, rep: $rep, cpu_ms_per_run: (if .done > 0 then ($cpu / 1000) / .done * 1000 | round / 1000 else null end)}' \
           | tee -a "$OUT"
       done
     done
     kill "$SAMPLER" 2>/dev/null || true
     wait "$SAMPLER" 2>/dev/null || true
     SAMPLER=
-    docker logs bench-server >"${OUT%.jsonl}-$target-$backend.log" 2>&1
+
     jq -nc --arg t "$target" --arg b "$backend" --argjson m "$(cat "$memfile")" \
       '{mode: "memory", target: $t, backend: $b, peak_anon_mb: ($m / 1048576 | round)}' | tee -a "$OUT"
     rm -f "$memfile"
+   done
   done
 done
 echo "results: $OUT"

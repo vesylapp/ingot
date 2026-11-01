@@ -39,7 +39,11 @@ STYLE = """
 def load(path):
     rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
     runs = [r for r in rows if r["mode"] != "memory"]
-    mem = {(r["target"], r["backend"]): r["peak_anon_mb"] for r in rows if r["mode"] == "memory"}
+    mem = {}
+    for r in rows:
+        if r["mode"] == "memory":
+            k = (r["target"], r["backend"])
+            mem[k] = max(mem.get(k, 0), r["peak_anon_mb"])
     versions = {r["target"]: r["version"] for r in runs}
     return runs, mem, versions
 
@@ -57,22 +61,22 @@ def median(runs, target, backend, mode, kind, field):
 def ticks(v):
     """Round axis ticks (steps of 1/2/5 x 10^k) covering 0..v."""
     k = 1
-    while k * 10 <= v / 4:
+    while k * 10 <= v / 5:
         k *= 10
-    step = next(m * k for m in (1, 2, 5, 10) if m * k >= v / 4)
+    step = next(m * k for m in (1, 2, 2.5, 5, 10) if m * k >= v / 5)
     n = int(-(-v // step))
     return [step * i for i in range(n + 1)]
 
 
 def compact(v):
     if v >= 1000:
-        s = f"{v / 1000:.1f}".rstrip("0").rstrip(".")
+        s = f"{v / 1000:.2f}".rstrip("0").rstrip(".")
         return f"{s}K"
     return f"{v:g}"
 
 
 def fmt(v):
-    return f"{v:,.0f}" if v >= 10 else f"{v:,.1f}"
+    return f"{v:,.0f}" if v >= 10 or v == int(v) else f"{v:,.1f}"
 
 
 def bar_chart(title, subtitle, panels, unit, labels, path):
@@ -164,25 +168,25 @@ def tables(runs, mem, versions, labels):
             )
     rate = next((r for r in runs if r["mode"] == "latency"), None)
     if rate:
-        out.append(f"\n### Latency at light load (ms, lower is better)\n")
+        out.append("\n### Latency at light load (ms, lower is better)\n")
         out.append(
             "Event sent → last step of a 3-step function finished, "
-            f"{rate['n']} events sent one at a time at a steady rate.\n"
+            f"{rate['n']} events sent one at a time at a steady rate (so p99 is the slowest run).\n"
         )
-        out.append("| Backend | Server | p50 | p95 | p99 | max |")
-        out.append("|---|---|--:|--:|--:|--:|")
+        out.append("| Backend | Server | p50 | p95 | p99 |")
+        out.append("|---|---|--:|--:|--:|")
         for b in BACKENDS:
             for t in TARGETS:
                 out.append(
                     f"| {BACKEND_LABEL[b]} | {labels[t]} | "
-                    + " | ".join(cell(t, b, "latency", "three", f) for f in ("p50_ms", "p95_ms", "p99_ms", "max_ms"))
+                    + " | ".join(cell(t, b, "latency", "three", f) for f in ("p50_ms", "p95_ms", "p99_ms"))
                     + " |"
                 )
     out.append("\n### Resource use\n")
     out.append(
         "CPU is the total CPU time spent by the server container plus the database container "
         "(Postgres/Redis), divided by runs completed, during the 3-step throughput run. Memory is the "
-        "server container's peak anonymous (heap) memory over the whole session; it excludes the "
+        "server container's peak anonymous (heap) memory; it excludes the "
         "database container.\n"
     )
     out.append("| Backend | Server | CPU per run (ms) | Peak server memory (MB) |")

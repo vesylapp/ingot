@@ -41,7 +41,19 @@ curl -X POST http://localhost:8288/e/my-event-key -d '{"name":"app/user.created"
 
 ## Performance
 
-PERF_PLACEHOLDER
+Measured against the official self-hosted server (`inngest/inngest:v1.49.0`) with the same SDK
+app and workload, all in Docker on one machine (Apple M4):
+
+| Backend | oxidle runs/s (no steps / 3 steps) | Inngest runs/s | Latency p50 (oxidle / Inngest) |
+|---|--:|--:|--:|
+| SQLite | 790 / 582 | 10 / 8 | 18 ms / 325 ms |
+| Postgres | 1,110 / 696 | 294 / 202 | 37 ms / 239 ms |
+| Redis | 1,921 / 1,010 | 10 / 9 | 15 ms / 304 ms |
+
+oxidle also uses 7–33× less CPU per run and under 50 MB of memory (Inngest: 320–380 MB).
+Inngest's SQLite and Redis setups are limited by its SQLite history writes; with a tuned Postgres
+pool it reaches ~520 runs/s, against ~1,200 for oxidle. Methodology, charts and the full analysis:
+[docs/benchmarks.md](docs/benchmarks.md).
 
 ## Dashboard
 
