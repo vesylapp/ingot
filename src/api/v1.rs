@@ -95,6 +95,7 @@ pub fn run_json(r: &RunRecord) -> Value {
     v
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_ulid(id: &str) -> Result<Ulid, Response> {
     Ulid::from_string(id).map_err(|_| public_error(StatusCode::BAD_REQUEST, &format!("invalid ID: {id}")))
 }

@@ -11,6 +11,7 @@ fn err(status: StatusCode, msg: String) -> Response {
     json_response(status, &json!({ "error": msg, "status": status.as_u16() }))
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_run(id: &str) -> Result<Ulid, Response> {
     Ulid::from_string(id).map_err(|_| err(StatusCode::BAD_REQUEST, format!("invalid run ID: {id}")))
 }

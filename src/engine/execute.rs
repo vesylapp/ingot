@@ -92,8 +92,8 @@ impl Engine {
         }
 
         // Concurrency.
-        if !state.meta.concurrency.is_empty() {
-            if let Some(key) = self
+        if !state.meta.concurrency.is_empty()
+            && let Some(key) = self
                 .state
                 .acquire_concurrency(&item.id, &state.meta.concurrency, now + LEASE_MS)
                 .await?
@@ -103,7 +103,6 @@ impl Engine {
                     blocked_on: Some(key),
                 });
             }
-        }
 
         let result = self.execute_inner(&f, &mut state, item).await;
 
@@ -821,12 +820,11 @@ impl Engine {
         let mut url = opts.get("url").and_then(|v| v.as_str()).unwrap_or_default().to_string();
         let key = opts.get("auth_key").and_then(|v| v.as_str()).unwrap_or_default();
         let format = opts.get("format").and_then(|v| v.as_str()).unwrap_or_default();
-        if format == "gemini" && !key.is_empty() {
-            if let Ok(mut u) = url::Url::parse(&url) {
+        if format == "gemini" && !key.is_empty()
+            && let Ok(mut u) = url::Url::parse(&url) {
                 u.query_pairs_mut().append_pair("key", key);
                 url = u.to_string();
             }
-        }
         let mut rb = self
             .http
             .post(&url)

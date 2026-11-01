@@ -236,16 +236,13 @@ pub fn parse_function(
         .and_then(|t| get_str(t, "finish"))
         .and_then(parse_duration_ms);
 
-    let singleton = match raw.get("singleton").filter(|v| v.is_object()) {
-        Some(s) => Some(Singleton {
+    let singleton = raw.get("singleton").filter(|v| v.is_object()).map(|s| Singleton {
             key: get_str(s, "key").map(String::from),
             mode: match get_str(s, "mode") {
                 Some("cancel") => SingletonMode::Cancel,
                 _ => SingletonMode::Skip,
             },
-        }),
-        None => None,
-    };
+        });
 
     if batch.is_some()
         && (!cancel.is_empty() || debounce.is_some() || singleton.is_some() || priority_run.is_some())

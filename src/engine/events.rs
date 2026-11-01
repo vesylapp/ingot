@@ -45,8 +45,8 @@ impl Engine {
             }
         }
 
-        if name == EVENT_FN_FINISHED {
-            if let Some(cid) = evt
+        if name == EVENT_FN_FINISHED
+            && let Some(cid) = evt
                 .event
                 .data
                 .get("correlation_id")
@@ -55,7 +55,6 @@ impl Engine {
             {
                 self.resume_invoke(cid, &evt.event.data).await?;
             }
-        }
 
         self.match_pauses(evt, &evt_json).await
     }
