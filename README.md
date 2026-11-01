@@ -17,11 +17,65 @@ cargo build --release
 
 # Development mode (no keys required, server kind "dev")
 ./target/release/oxidle dev
-
-# Or as a container (same arguments)
-docker build -t oxidle .
-docker run -p 8288:8288 -v oxidle-data:/data oxidle start --event-key ... --signing-key ...
 ```
+
+## Docker
+
+Multi-arch images (linux/amd64, linux/arm64) are published to GitHub Container Registry by
+`.github/workflows/docker.yml`:
+
+| Tag | Updated by |
+|---|---|
+| `ghcr.io/benwyrosdick/oxidle:latest`, `:main` | every push to `main` |
+| `:1.2.3`, `:1.2`, `:1` | pushing a `v1.2.3` tag (`:1` is skipped for `v0.x`) |
+| `:sha-<short>` | every published build, for pinning |
+
+```sh
+docker run -p 8288:8288 -v oxidle-data:/data ghcr.io/benwyrosdick/oxidle:latest \
+  start --event-key my-event-key --signing-key 8b1d8a3c4f0e...
+```
+
+Every flag can also be set by environment variable (`INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`,
+`INNGEST_POSTGRES_URI`, `INNGEST_REDIS_URI`, …; see [Configuration](#configuration)), which is
+the easiest way to run it from another app's Compose file:
+
+```yaml
+services:
+  inngest:
+    image: ghcr.io/benwyrosdick/oxidle:latest
+    ports: ["8288:8288"]
+    environment:
+      INNGEST_EVENT_KEY: my-event-key
+      INNGEST_SIGNING_KEY: 8b1d8a3c4f0e2d9b7a6c5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b
+      INNGEST_POSTGRES_URI: postgres://postgres:postgres@postgres:5432/postgres
+      INNGEST_REDIS_URI: redis://redis:6379
+      INNGEST_SDK_URL: http://app:3000/api/inngest
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+volumes:
+  pgdata:
+```
+
+Your app then uses `INNGEST_BASE_URL=http://inngest:8288` inside the Compose network. Without
+the Postgres/Redis variables oxidle uses SQLite in `/data`; mount a volume there to keep it.
+The image runs as a non-root user (uid 10001) and does not include the dashboard UI (see
+[Dashboard](#dashboard)). Build it locally with `docker build -t oxidle .`.
+
+GHCR makes a new package private by default. After the first publish, open the package's
+settings on GitHub and set its visibility to public, or log hosts in with
+`docker login ghcr.io` using a token that has `read:packages`.
 
 Point your app at it exactly as you would a self-hosted Inngest:
 

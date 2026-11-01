@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::io::IsTerminal;
 use oxidle::config::{Cli, Command, Config};
 use tracing_subscriber::EnvFilter;
 
@@ -13,7 +14,11 @@ async fn main() {
     if json {
         tracing_subscriber::fmt().with_env_filter(filter).json().init();
     } else {
-        tracing_subscriber::fmt().with_env_filter(filter).init();
+        // No color codes when logs go to a file or container log driver.
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_ansi(std::io::stdout().is_terminal())
+            .init();
     }
 
     let (args, dev) = match cli.command {
