@@ -109,6 +109,11 @@ pub struct ServerArgs {
     /// Days to retain finished run state and events (0 = forever).
     #[arg(long, env = "OXIDLE_RETENTION_DAYS", default_value_t = 7)]
     pub retention_days: u64,
+
+    /// Seconds to drain in-flight work on SIGTERM before exiting. Keep it below the
+    /// orchestrator's kill timeout (Kubernetes: terminationGracePeriodSeconds, default 30).
+    #[arg(long, env = "OXIDLE_SHUTDOWN_TIMEOUT", default_value_t = 25)]
+    pub shutdown_timeout: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +138,7 @@ pub struct Config {
     pub ui_dir: Option<String>,
     pub dev: bool,
     pub retention_days: u64,
+    pub shutdown_timeout_s: u64,
 }
 
 impl Config {
@@ -187,6 +193,7 @@ impl Config {
             ui_dir: a.ui_dir,
             dev,
             retention_days: a.retention_days,
+            shutdown_timeout_s: a.shutdown_timeout,
         })
     }
 

@@ -32,6 +32,7 @@ fn config() -> Config {
         ui_dir: None,
         dev: true,
         retention_days: 0,
+        shutdown_timeout_s: 5,
     }
 }
 

@@ -54,6 +54,15 @@ const fns = [
     return { message: `hello ${event.data.name}` };
   }),
 
+  // A step that takes event.data.ms; used to check shutdown hands back in-flight work.
+  create({ id: "slow", triggers: [{ event: "e2e/slow" }] }, async ({ event, step }) => {
+    return step.run("wait", async () => {
+      bump(state.attempts, "slow");
+      await sleepMs(event.data.ms);
+      return "done";
+    });
+  }),
+
   create({ id: "steps", triggers: [{ event: "e2e/steps" }] }, async ({ event, step }) => {
     const a = await step.run("a", () => event.data.n + 1);
     const b = await step.run("b", () => a * 2);

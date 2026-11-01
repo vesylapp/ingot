@@ -5,19 +5,23 @@ use super::{Engine, LEASE_MS};
 use crate::types::*;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Semaphore;
 
 pub fn spawn_workers(engine: Arc<Engine>) {
     tokio::spawn(async move {
-        let workers = engine.cfg.queue_workers;
-        let sem = Arc::new(Semaphore::new(workers));
+        let sem = engine.workers.clone();
         let tick = Duration::from_millis(engine.cfg.tick_ms);
+        let mut shutdown = engine.shutdown_rx();
         loop {
+            if *shutdown.borrow() {
+                return;
+            }
             let available = sem.available_permits();
             if available == 0 {
                 // All workers busy: wait for one to free up.
-                let p = sem.clone().acquire_owned().await.expect("semaphore");
-                drop(p);
+                tokio::select! {
+                    p = sem.clone().acquire_owned() => drop(p),
+                    _ = shutdown.wait_for(|s| *s) => return,
+                }
                 continue;
             }
             let items = match engine
@@ -45,6 +49,7 @@ pub fn spawn_workers(engine: Arc<Engine>) {
                 tokio::select! {
                     _ = engine.queue_notify.notified() => {}
                     _ = tokio::time::sleep(tick) => {}
+                    _ = shutdown.wait_for(|s| *s) => return,
                 }
             }
         }
@@ -55,6 +60,7 @@ impl Engine {
     async fn process(self: &Arc<Self>, mut item: QueueItem) {
         let metrics = crate::metrics::get();
         let _in_progress = metrics.queue_item_started(item.kind.as_str());
+        self.inflight.lock().insert(item.id.clone(), item.clone());
         let lease_id = item.lease_id.clone().unwrap_or_default();
         let id = item.id.clone();
         let extender = {
@@ -126,6 +132,7 @@ impl Engine {
         if let Err(err) = res {
             tracing::error!(item = %item.id, error = %err, "failed to settle queue item");
         }
+        self.inflight.lock().remove(&item.id);
     }
 
     async fn handle_debounce_item(self: &Arc<Self>, item: &QueueItem) -> anyhow::Result<Outcome> {

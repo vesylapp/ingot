@@ -1126,6 +1126,11 @@ impl StateStore for RedisStore {
         r.get(1).map(|s| parse_score(s)).transpose()
     }
 
+    async fn ping(&self) -> Result<()> {
+        let _: String = ::redis::cmd("PING").query_async(&mut self.conn()).await?;
+        Ok(())
+    }
+
     async fn queue_stats(&self, now: i64) -> Result<QueueStats> {
         let (total, ready, first): (i64, i64, Vec<String>) = ::redis::pipe()
             .cmd("ZCARD")

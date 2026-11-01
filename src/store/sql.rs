@@ -8,7 +8,7 @@ use anyhow::{Context, anyhow};
 use sqlx::any::{AnyPoolOptions, AnyRow};
 use sqlx::{Any, AnyPool, Row, Transaction};
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialect {
@@ -26,6 +26,10 @@ pub struct SqlStore {
 
 /// How long completed job ids are remembered for enqueue dedup.
 const DONE_TTL_MS: i64 = 12 * 3600 * 1000;
+/// Rows per cleanup transaction in `gc`.
+const GC_BATCH: i64 = 5000;
+/// Time budget of one `gc` pass; a backlog is worked off over several passes.
+const GC_BUDGET: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Clone)]
 pub struct PoolConfig {
@@ -194,7 +198,10 @@ CREATE TABLE IF NOT EXISTS batch_events (
 "#;
 
 /// Schema migrations, applied in order. Never edit a released entry; append a new one.
-const MIGRATIONS: &[&str] = &[SCHEMA, SCHEMA_V2];
+const MIGRATIONS: &[&str] = &[SCHEMA, SCHEMA_V2, SCHEMA_V3];
+
+/// Postgres advisory lock key held while migrating, so nodes starting together take turns.
+const MIGRATION_LOCK: i64 = 0x6f78_6964_6c65_6d67; // "oxidlemg"
 
 const SCHEMA_V2: &str = r#"
 ALTER TABLE function_runs ADD COLUMN event_name TEXT;
@@ -220,6 +227,34 @@ CREATE TABLE IF NOT EXISTS run_spans (
   PRIMARY KEY (run_id, span_id)
 )
 "#;
+
+/// Indexes for retention: every cleanup query is a range scan instead of a full table scan.
+const SCHEMA_V3: &str = r#"
+CREATE INDEX IF NOT EXISTS function_runs_ended ON function_runs(ended_at);
+CREATE INDEX IF NOT EXISTS run_state_updated ON run_state(updated_at);
+CREATE INDEX IF NOT EXISTS queue_done_expires ON queue_done(expires_at);
+CREATE INDEX IF NOT EXISTS kv_expires ON kv(expires_at);
+CREATE INDEX IF NOT EXISTS concurrency_expires ON concurrency(expires_at);
+CREATE INDEX IF NOT EXISTS pauses_expires ON pauses(kind, expires_at);
+CREATE INDEX IF NOT EXISTS events_received_id ON events(received_at, internal_id);
+DROP INDEX IF EXISTS events_received
+"#;
+
+/// Delete the rows of `table` whose `col` is one of `ids`.
+async fn delete_in(
+    tx: &mut Transaction<'static, Any>,
+    table: &str,
+    col: &str,
+    ids: &[String],
+) -> Result<u64> {
+    let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("${i}")).collect();
+    let sql = format!("DELETE FROM {table} WHERE {col} IN ({})", placeholders.join(", "));
+    let mut q = sqlx::query(&sql);
+    for id in ids {
+        q = q.bind(id.clone());
+    }
+    Ok(q.execute(&mut **tx).await?.rows_affected())
+}
 
 fn ulid_s(u: Ulid) -> String {
     u.to_string()
@@ -285,29 +320,60 @@ impl SqlStore {
         self.retention_ms.store(ms, Ordering::Relaxed);
     }
 
+    /// Apply pending migrations. On Postgres an advisory lock serializes nodes that start
+    /// together; each migration runs in its own transaction, so a failure leaves nothing
+    /// half-applied and the next start retries it.
     async fn migrate(&self) -> Result<()> {
+        let mut conn = self.pool.acquire().await?;
+        if self.dialect == Dialect::Postgres {
+            sqlx::query("SELECT pg_advisory_lock($1)")
+                .bind(MIGRATION_LOCK)
+                .execute(&mut *conn)
+                .await?;
+        }
+        let result = self.migrate_locked(&mut conn).await;
+        // Closing the connection always releases the session lock, even after an error.
+        let _ = conn.close().await;
+        result
+    }
+
+    async fn migrate_locked(&self, conn: &mut sqlx::AnyConnection) -> Result<()> {
+        use sqlx::Connection;
         sqlx::query("CREATE TABLE IF NOT EXISTS schema_migrations (version BIGINT PRIMARY KEY)")
-            .execute(&self.pool)
+            .execute(&mut *conn)
             .await?;
-        let current: i64 = sqlx::query("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations")
-            .fetch_one(&self.pool)
-            .await?
-            .try_get("v")?;
         for (i, migration) in MIGRATIONS.iter().enumerate() {
             let version = i as i64 + 1;
-            if version <= current {
+            let mut tx = match self.dialect {
+                Dialect::Sqlite => conn.begin_with("BEGIN IMMEDIATE").await?,
+                Dialect::Postgres => conn.begin().await?,
+            };
+            let applied = sqlx::query("SELECT version FROM schema_migrations WHERE version = $1")
+                .bind(version)
+                .fetch_optional(&mut *tx)
+                .await?
+                .is_some();
+            if applied {
+                tx.rollback().await?;
                 continue;
             }
             for stmt in migration.split(';').map(str::trim).filter(|s| !s.is_empty()) {
-                sqlx::query(stmt)
-                    .execute(&self.pool)
+                // Postgres can make column additions idempotent; SQLite relies on the transaction.
+                let stmt = match self.dialect {
+                    Dialect::Postgres => stmt.replace("ADD COLUMN ", "ADD COLUMN IF NOT EXISTS "),
+                    Dialect::Sqlite => stmt.to_string(),
+                };
+                sqlx::query(&stmt)
+                    .execute(&mut *tx)
                     .await
                     .with_context(|| format!("migration {version} failed: {stmt}"))?;
             }
             sqlx::query("INSERT INTO schema_migrations (version) VALUES ($1)")
                 .bind(version)
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await?;
+            tx.commit().await?;
+            tracing::info!(version, "applied schema migration");
         }
         Ok(())
     }
@@ -328,6 +394,12 @@ impl SqlStore {
                 .await?;
         }
         Ok(())
+    }
+
+    /// Run a `SELECT ... AS id ... $1 ... LIMIT $2` query and collect the ids.
+    async fn ids(&self, sql: &str, a: i64, limit: i64) -> Result<Vec<String>> {
+        let rows = sqlx::query(sql).bind(a).bind(limit).fetch_all(&self.pool).await?;
+        Ok(rows.iter().map(|r| r.try_get("id")).collect::<sqlx::Result<_>>()?)
     }
 
     fn skip_locked(&self) -> &'static str {
@@ -848,15 +920,124 @@ impl MetaStore for SqlStore {
         rows.iter().map(row_run).collect()
     }
 
-    async fn prune(&self, before: i64) -> Result<()> {
-        sqlx::query("DELETE FROM events WHERE received_at < $1")
-            .bind(before)
-            .execute(&self.pool)
+    async fn prune(&self, before: i64, batch: i64, deadline: Instant) -> Result<Pruned> {
+        let mut out = Pruned::default();
+
+        // Finished runs, with their timelines in the same transaction.
+        loop {
+            if Instant::now() >= deadline {
+                return Ok(out);
+            }
+            let ids = self
+                .ids(
+                    "SELECT run_id AS id FROM function_runs WHERE ended_at < $1 ORDER BY ended_at LIMIT $2",
+                    before,
+                    batch,
+                )
+                .await?;
+            if ids.is_empty() {
+                break;
+            }
+            let mut tx = self.tx().await?;
+            out.spans += delete_in(&mut tx, "run_spans", "run_id", &ids).await?;
+            out.runs += delete_in(&mut tx, "function_runs", "run_id", &ids).await?;
+            tx.commit().await?;
+            if (ids.len() as i64) < batch {
+                break;
+            }
+        }
+
+        // Timelines whose run row is already gone (recorded before timelines were pruned with
+        // their runs). Run ids are ULIDs, so `run_id < cutoff` limits the scan to old runs.
+        let cutoff = Ulid::from_parts(before.max(0) as u64, 0).to_string();
+        loop {
+            if Instant::now() >= deadline {
+                return Ok(out);
+            }
+            let rows = sqlx::query(
+                "SELECT DISTINCT s.run_id AS id FROM run_spans s WHERE s.run_id < $1
+                 AND NOT EXISTS (SELECT 1 FROM function_runs r WHERE r.run_id = s.run_id) LIMIT $2",
+            )
+            .bind(&cutoff)
+            .bind(batch)
+            .fetch_all(&self.pool)
             .await?;
-        sqlx::query("DELETE FROM function_runs WHERE ended_at IS NOT NULL AND ended_at < $1")
-            .bind(before)
-            .execute(&self.pool)
+            let ids: Vec<String> = rows.iter().map(|r| r.try_get("id")).collect::<sqlx::Result<_>>()?;
+            if ids.is_empty() {
+                break;
+            }
+            let mut tx = self.tx().await?;
+            out.spans += delete_in(&mut tx, "run_spans", "run_id", &ids).await?;
+            tx.commit().await?;
+            if (ids.len() as i64) < batch {
+                break;
+            }
+        }
+
+        // Events, unless a remaining run still refers to them (a long sleep or wait keeps its
+        // trigger visible in the dashboard and available for rerun). Old events are paged by
+        // index; each page drops the ones a run references and deletes the rest by id.
+        let mut cursor: Option<(i64, String)> = None;
+        loop {
+            if Instant::now() >= deadline {
+                return Ok(out);
+            }
+            let page = match &cursor {
+                None => sqlx::query(
+                    "SELECT internal_id, received_at FROM events WHERE received_at < $1
+                     ORDER BY received_at, internal_id LIMIT $2",
+                )
+                .bind(before)
+                .bind(batch),
+                Some((at, id)) => sqlx::query(
+                    "SELECT internal_id, received_at FROM events WHERE received_at < $1
+                     AND (received_at > $2 OR (received_at = $2 AND internal_id > $3))
+                     ORDER BY received_at, internal_id LIMIT $4",
+                )
+                .bind(before)
+                .bind(*at)
+                .bind(id.clone())
+                .bind(batch),
+            }
+            .fetch_all(&self.pool)
             .await?;
+            let Some(last) = page.last() else { break };
+            cursor = Some((last.try_get("received_at")?, last.try_get("internal_id")?));
+            let ids: Vec<String> = page
+                .iter()
+                .map(|r| r.try_get("internal_id"))
+                .collect::<sqlx::Result<_>>()?;
+            let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("${i}")).collect();
+            let sql = format!(
+                "SELECT DISTINCT event_id FROM function_runs WHERE event_id IN ({})",
+                placeholders.join(", ")
+            );
+            let mut q = sqlx::query(&sql);
+            for id in &ids {
+                q = q.bind(id.clone());
+            }
+            let referenced: std::collections::HashSet<String> = q
+                .fetch_all(&self.pool)
+                .await?
+                .iter()
+                .map(|r| r.try_get("event_id"))
+                .collect::<sqlx::Result<_>>()?;
+            let doomed: Vec<String> = ids.iter().filter(|id| !referenced.contains(*id)).cloned().collect();
+            if !doomed.is_empty() {
+                let mut tx = self.tx().await?;
+                out.events += delete_in(&mut tx, "events", "internal_id", &doomed).await?;
+                tx.commit().await?;
+            }
+            if (ids.len() as i64) < batch {
+                break;
+            }
+        }
+        out.complete = true;
+        Ok(out)
+    }
+
+    async fn ping(&self) -> Result<()> {
+        sqlx::query("SELECT 1").execute(&self.pool).await?;
         Ok(())
     }
 
@@ -1360,6 +1541,11 @@ impl StateStore for SqlStore {
         Ok(row.try_get::<Option<i64>, _>("at")?)
     }
 
+    async fn ping(&self) -> Result<()> {
+        sqlx::query("SELECT 1").execute(&self.pool).await?;
+        Ok(())
+    }
+
     async fn queue_stats(&self, now: i64) -> Result<QueueStats> {
         let row = sqlx::query(
             "SELECT COUNT(*) AS total,
@@ -1842,36 +2028,65 @@ impl StateStore for SqlStore {
     }
 
     async fn gc(&self, now: i64) -> Result<()> {
+        let deadline = Instant::now() + GC_BUDGET;
         let retention = self.retention_ms.load(Ordering::Relaxed);
         if retention > 0 {
             let cutoff = now - retention;
-            sqlx::query(
-                "DELETE FROM run_steps WHERE run_id IN
-                 (SELECT run_id FROM run_state WHERE status <> 'Running' AND updated_at < $1)",
-            )
-            .bind(cutoff)
-            .execute(&self.pool)
-            .await?;
-            sqlx::query("DELETE FROM run_state WHERE status <> 'Running' AND updated_at < $1")
-                .bind(cutoff)
-                .execute(&self.pool)
-                .await?;
+            while Instant::now() < deadline {
+                let ids = self
+                    .ids(
+                        "SELECT run_id AS id FROM run_state WHERE updated_at < $1 AND status <> 'Running'
+                         ORDER BY updated_at LIMIT $2",
+                        cutoff,
+                        GC_BATCH,
+                    )
+                    .await?;
+                if ids.is_empty() {
+                    break;
+                }
+                let mut tx = self.tx().await?;
+                delete_in(&mut tx, "run_steps", "run_id", &ids).await?;
+                delete_in(&mut tx, "run_state", "run_id", &ids).await?;
+                tx.commit().await?;
+                if (ids.len() as i64) < GC_BATCH {
+                    break;
+                }
+            }
         }
-        sqlx::query("DELETE FROM queue_done WHERE expires_at < $1")
-            .bind(now)
-            .execute(&self.pool)
-            .await?;
-        sqlx::query("DELETE FROM kv WHERE expires_at IS NOT NULL AND expires_at < $1")
-            .bind(now)
-            .execute(&self.pool)
-            .await?;
+        // Expired markers, in batches so a backlog never becomes one long transaction.
+        for (sql, before) in [
+            (
+                "DELETE FROM queue_done WHERE id IN
+                 (SELECT id FROM queue_done WHERE expires_at < $1 LIMIT $2)",
+                now,
+            ),
+            (
+                "DELETE FROM kv WHERE key IN
+                 (SELECT key FROM kv WHERE expires_at IS NOT NULL AND expires_at < $1 LIMIT $2)",
+                now,
+            ),
+            // Expired pauses whose timeout already fired linger only for cancel pauses.
+            (
+                "DELETE FROM pauses WHERE id IN
+                 (SELECT id FROM pauses WHERE kind = 'cancel' AND expires_at < $1 LIMIT $2)",
+                now - 20 * 60 * 1000,
+            ),
+        ] {
+            while Instant::now() < deadline {
+                let n = sqlx::query(sql)
+                    .bind(before)
+                    .bind(GC_BATCH)
+                    .execute(&self.pool)
+                    .await?
+                    .rows_affected();
+                if (n as i64) < GC_BATCH {
+                    break;
+                }
+            }
+        }
+        // Holders expire continuously and the table stays small.
         sqlx::query("DELETE FROM concurrency WHERE expires_at < $1")
             .bind(now)
-            .execute(&self.pool)
-            .await?;
-        // Expired pauses whose timeout already fired linger only for cancel pauses.
-        sqlx::query("DELETE FROM pauses WHERE kind = 'cancel' AND expires_at < $1")
-            .bind(now - 20 * 60 * 1000)
             .execute(&self.pool)
             .await?;
         Ok(())

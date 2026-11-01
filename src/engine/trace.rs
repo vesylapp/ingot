@@ -10,7 +10,7 @@ use crate::util::rfc3339_ms;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use ulid::Ulid;
 
 pub const FINALIZATION: &str = "finalization";
@@ -27,6 +27,8 @@ pub mod status {
 enum Msg {
     Span(Box<Span>),
     Started(Ulid, i64),
+    /// Answered once everything sent before it is written.
+    Flush(oneshot::Sender<()>),
 }
 
 #[derive(Clone)]
@@ -40,17 +42,22 @@ impl Tracer {
         tokio::spawn(async move {
             let mut spans = Vec::new();
             let mut started = Vec::new();
-            let push = |m: Msg, spans: &mut Vec<Span>, started: &mut Vec<(Ulid, i64)>| match m {
+            let mut flushed: Vec<oneshot::Sender<()>> = Vec::new();
+            let push = |m: Msg,
+                        spans: &mut Vec<Span>,
+                        started: &mut Vec<(Ulid, i64)>,
+                        flushed: &mut Vec<oneshot::Sender<()>>| match m {
                 Msg::Span(s) => spans.push(*s),
                 Msg::Started(r, t) => started.push((r, t)),
+                Msg::Flush(done) => flushed.push(done),
             };
             while let Some(first) = rx.recv().await {
-                push(first, &mut spans, &mut started);
+                push(first, &mut spans, &mut started, &mut flushed);
                 // Coalesce whatever else is queued (bounded) into one write.
                 let deadline = tokio::time::Instant::now() + Duration::from_millis(20);
                 while spans.len() + started.len() < 500 {
                     match tokio::time::timeout_at(deadline, rx.recv()).await {
-                        Ok(Some(m)) => push(m, &mut spans, &mut started),
+                        Ok(Some(m)) => push(m, &mut spans, &mut started, &mut flushed),
                         _ => break,
                     }
                 }
@@ -63,6 +70,9 @@ impl Tracer {
                     }
                 }
                 spans.clear();
+                for done in flushed.drain(..) {
+                    let _ = done.send(());
+                }
             }
         });
         Tracer { tx }
@@ -74,6 +84,14 @@ impl Tracer {
 
     pub fn run_started(&self, run_id: Ulid, at: i64) {
         let _ = self.tx.send(Msg::Started(run_id, at));
+    }
+
+    /// Wait until everything recorded so far is written.
+    pub async fn flush(&self) {
+        let (done, wait) = oneshot::channel();
+        if self.tx.send(Msg::Flush(done)).is_ok() {
+            let _ = wait.await;
+        }
     }
 }
 

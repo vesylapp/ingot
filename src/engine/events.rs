@@ -12,10 +12,22 @@ use tokio::sync::{Semaphore, mpsc};
 const ROUTER_CONCURRENCY: usize = 64;
 
 /// Events from one request are handled in order; separate requests run concurrently.
-pub fn spawn_router(engine: Arc<Engine>, mut rx: mpsc::Receiver<Vec<TrackedEvent>>) {
+/// On shutdown the router stops receiving, then handles everything already queued.
+pub fn spawn_router(
+    engine: Arc<Engine>,
+    mut rx: mpsc::Receiver<Vec<TrackedEvent>>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let sem = Arc::new(Semaphore::new(ROUTER_CONCURRENCY));
-        while let Some(events) = rx.recv().await {
+        loop {
+            let events = tokio::select! {
+                events = rx.recv() => events,
+                _ = engine.router_stop.notified() => {
+                    rx.close();
+                    continue;
+                }
+            };
+            let Some(events) = events else { break };
             let permit = sem.clone().acquire_owned().await.expect("semaphore");
             let e = engine.clone();
             tokio::spawn(async move {
@@ -27,7 +39,9 @@ pub fn spawn_router(engine: Arc<Engine>, mut rx: mpsc::Receiver<Vec<TrackedEvent
                 drop(permit);
             });
         }
-    });
+        // Wait for the batches still being handled.
+        let _ = sem.acquire_many(ROUTER_CONCURRENCY as u32).await;
+    })
 }
 
 impl Engine {

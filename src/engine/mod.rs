@@ -5,10 +5,12 @@ pub mod driver;
 pub mod events;
 pub mod execute;
 pub mod finalize;
+pub mod maintenance;
 pub mod ops;
 pub mod pauses;
 pub mod registry;
 pub mod schedule;
+pub mod shutdown;
 pub mod sync;
 pub mod trace;
 pub mod worker;
@@ -18,8 +20,11 @@ use crate::config::Config;
 use crate::store::{MetaStore, StateStore};
 use crate::types::*;
 use oxidle_expr::ExprCache;
+use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::{Notify, Semaphore, mpsc, watch};
+use tokio::task::JoinHandle;
 
 pub use registry::Registry;
 
@@ -39,7 +44,18 @@ pub struct Engine {
     /// Wakes queue workers when new work is enqueued locally.
     pub queue_notify: Notify,
     pub trace: trace::Tracer,
+    /// Identifies this process (maintenance lease holder).
+    pub node_id: String,
     events_tx: mpsc::Sender<Vec<TrackedEvent>>,
+    /// Set once on shutdown: stops leasing, readiness, and background loops.
+    shutdown: watch::Sender<bool>,
+    /// One permit per queue worker; all permits free means nothing is in flight.
+    workers: Arc<Semaphore>,
+    /// Items leased by this node and still processing, by item id.
+    inflight: Mutex<HashMap<String, QueueItem>>,
+    router: Mutex<Option<JoinHandle<()>>>,
+    /// Tells the router to stop receiving and drain what it has.
+    router_stop: Notify,
 }
 
 impl Engine {
@@ -56,6 +72,7 @@ impl Engine {
             .build()
             .expect("http client");
         let signing = cfg.signing_key.as_deref().map(SigningKey::new);
+        let cfg_workers = cfg.queue_workers.max(1);
         let engine = Arc::new(Engine {
             registry: Registry::new(meta.clone()),
             trace: trace::Tracer::spawn(meta.clone()),
@@ -66,7 +83,13 @@ impl Engine {
             signing,
             exprs: ExprCache::new(10_000),
             queue_notify: Notify::new(),
+            node_id: ulid::Ulid::generate().to_string(),
             events_tx,
+            shutdown: watch::channel(false).0,
+            workers: Arc::new(Semaphore::new(cfg_workers)),
+            inflight: Mutex::new(HashMap::new()),
+            router: Mutex::new(None),
+            router_stop: Notify::new(),
         });
         (engine, events_rx)
     }
@@ -74,27 +97,11 @@ impl Engine {
     /// Start background tasks: event router, queue workers, cron, app sync, gc.
     pub async fn start(self: &Arc<Self>, events_rx: mpsc::Receiver<Vec<TrackedEvent>>) -> anyhow::Result<()> {
         self.registry.reload().await?;
-        events::spawn_router(self.clone(), events_rx);
+        *self.router.lock() = Some(events::spawn_router(self.clone(), events_rx));
         worker::spawn_workers(self.clone());
         cron::spawn(self.clone());
         sync::spawn(self.clone());
-        let e = self.clone();
-        tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
-            loop {
-                tick.tick().await;
-                let now = now_ms();
-                if let Err(err) = e.state.gc(now).await {
-                    tracing::warn!(error = %err, "state gc failed");
-                }
-                if e.cfg.retention_days > 0 {
-                    let before = now - e.cfg.retention_days as i64 * 86_400_000;
-                    if let Err(err) = e.meta.prune(before).await {
-                        tracing::warn!(error = %err, "history prune failed");
-                    }
-                }
-            }
-        });
+        maintenance::spawn(self.clone());
         // Pick up functions synced through other nodes.
         let e = self.clone();
         tokio::spawn(async move {

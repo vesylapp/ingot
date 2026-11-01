@@ -57,6 +57,8 @@ pub struct Metrics {
     events_received: IntCounterVec,
     http_duration: HistogramVec,
     functions: IntGauge,
+    store_up: IntGaugeVec,
+    retention_deleted: IntCounterVec,
 }
 
 static METRICS: LazyLock<Metrics> = LazyLock::new(Metrics::new);
@@ -117,6 +119,15 @@ impl Metrics {
         )
         .expect("valid gauge");
         r.register(Box::new(queue_in_progress.clone())).expect("unique metric");
+        let store_up = IntGaugeVec::new(
+            Opts::new(
+                "oxidle_store_up",
+                "1 if the store answered a ping during this scrape, else 0 (database, state)",
+            ),
+            &["store"],
+        )
+        .expect("valid gauge");
+        r.register(Box::new(store_up.clone())).expect("unique metric");
         let build_info = IntGaugeVec::new(
             Opts::new("oxidle_build_info", "Always 1; labelled with the oxidle version"),
             &["version"],
@@ -213,6 +224,13 @@ impl Metrics {
                 request_buckets,
             ),
             functions: gauge(&r, "oxidle_functions", "Functions currently registered"),
+            store_up,
+            retention_deleted: counter(
+                &r,
+                "oxidle_retention_deleted_rows_total",
+                "History rows deleted by retention, by table",
+                &["table"],
+            ),
             registry: r,
         }
     }
@@ -289,6 +307,10 @@ impl Metrics {
             .inc_by(n as u64);
     }
 
+    pub fn retention_deleted(&self, table: &str, rows: u64) {
+        self.retention_deleted.with_label_values(&[table]).inc_by(rows);
+    }
+
     pub fn http_request(&self, method: &str, route: &str, status: u16, seconds: f64) {
         self.http_duration
             .with_label_values(&[method, route, &status.to_string()])
@@ -296,13 +318,32 @@ impl Metrics {
     }
 
     /// Refresh the store-backed gauges and encode everything in the Prometheus text format.
+    /// An unreachable store shows up as `oxidle_store_up 0` rather than a failed scrape; the
+    /// queue gauges then keep their last values.
     pub async fn render(&self, engine: &Engine) -> anyhow::Result<String> {
+        let timeout = std::time::Duration::from_secs(2);
+        let database = tokio::time::timeout(timeout, engine.meta.ping()).await;
+        self.store_up
+            .with_label_values(&["database"])
+            .set(matches!(database, Ok(Ok(()))) as i64);
         let now = now_ms();
-        let q = engine.state.queue_stats(now).await?;
-        self.queue_depth.set(q.total);
-        self.queue_ready.set(q.ready);
-        let lag_ms = q.oldest_at.map_or(0, |at| (now - at).max(0));
-        self.queue_lag.set(lag_ms as f64 / 1000.0);
+        match tokio::time::timeout(timeout, engine.state.queue_stats(now)).await {
+            Ok(Ok(q)) => {
+                self.store_up.with_label_values(&["state"]).set(1);
+                self.queue_depth.set(q.total);
+                self.queue_ready.set(q.ready);
+                let lag_ms = q.oldest_at.map_or(0, |at| (now - at).max(0));
+                self.queue_lag.set(lag_ms as f64 / 1000.0);
+            }
+            Ok(Err(err)) => {
+                tracing::warn!(error = %err, "metrics: state store unavailable");
+                self.store_up.with_label_values(&["state"]).set(0);
+            }
+            Err(_) => {
+                tracing::warn!("metrics: state store timed out");
+                self.store_up.with_label_values(&["state"]).set(0);
+            }
+        }
         self.functions.set(engine.registry.len() as i64);
 
         let mut buf = Vec::new();

@@ -106,8 +106,12 @@ pub trait MetaStore: Send + Sync {
     async fn get_run(&self, run_id: Ulid) -> Result<Option<RunRecord>>;
     async fn runs_for_event(&self, event_id: Ulid) -> Result<Vec<RunRecord>>;
     async fn list_runs(&self, q: &RunQuery) -> Result<Vec<RunRecord>>;
-    /// Delete events and finished run history older than `before` (ms).
-    async fn prune(&self, before: i64) -> Result<()>;
+    /// Delete history older than `before` (ms) in transactions of up to `batch` rows: finished
+    /// runs with their timelines, then events no remaining run refers to. Stops early at
+    /// `deadline`; the next call continues where this one left off.
+    async fn prune(&self, before: i64, batch: i64, deadline: std::time::Instant) -> Result<Pruned>;
+    /// Check the store is reachable.
+    async fn ping(&self) -> Result<()>;
 
     async fn count_runs(&self, q: &RunQuery) -> Result<i64>;
     async fn count_events(&self, q: &EventQuery) -> Result<i64>;
@@ -153,6 +157,16 @@ pub struct BatchAppend {
     pub len: u32,
     pub created: bool,
     pub duplicate: bool,
+}
+
+/// Rows deleted by one [`MetaStore::prune`] call.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Pruned {
+    pub runs: u64,
+    pub spans: u64,
+    pub events: u64,
+    /// False when the deadline cut the pass short.
+    pub complete: bool,
 }
 
 /// Queue size, for metrics. Leased items count as not ready: their `at` is the lease expiry.
@@ -215,6 +229,8 @@ pub trait StateStore: Send + Sync {
     async fn wake_blocked(&self, keys: &[String], n: i64) -> Result<()>;
     /// Queue size at `now` (ms), for metrics.
     async fn queue_stats(&self, now: i64) -> Result<QueueStats>;
+    /// Check the store is reachable.
+    async fn ping(&self) -> Result<()>;
 
     // ---- concurrency ----
     /// Try to take a slot on every key. Returns the first saturated key on failure.

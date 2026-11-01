@@ -169,6 +169,8 @@ the SDK as a normal response, so it counts as `success`, as in Inngest.
 | `oxidle_events_received_total` | counter | `source` (`api`, `internal`, `cron`) |
 | `oxidle_http_request_duration_seconds` | histogram | `method`, `route` (pattern, e.g. `/e/{key}`), `status` |
 | `oxidle_functions` | gauge | — functions currently registered |
+| `oxidle_store_up` | gauge | `store` (`database`, `state`) — 1 if it answered a ping this scrape |
+| `oxidle_retention_deleted_rows_total` | counter | `table` (`function_runs`, `run_spans`, `events`) |
 | `oxidle_build_info` | gauge | `version` |
 | `process_*` | various | standard process CPU, memory and file descriptors (Linux) |
 
@@ -195,8 +197,43 @@ All `inngest start` flags are accepted with the same `INNGEST_*` environment var
 `--retry-interval`, `--queue-workers`, `--tick`, `--no-ui`, `--json`, `--log-level`.
 
 oxidle-specific: `--retention-days` / `OXIDLE_RETENTION_DAYS` (default 7) prunes finished run
-state, events and history; `--ui-dir` / `OXIDLE_UI_DIR` points at the built dashboard;
+state, events and history; `--shutdown-timeout` / `OXIDLE_SHUTDOWN_TIMEOUT` (seconds, default
+25) bounds the drain on SIGTERM; `--ui-dir` / `OXIDLE_UI_DIR` points at the built dashboard;
 `OXIDLE_REDIS_PREFIX` (default `oxidle`) namespaces Redis keys.
+
+## Running in production
+
+**Health.** `GET /health` is a liveness check (always 200 while the process runs, as in
+Inngest). `GET /ready` is a readiness check: 503 while shutting down, or when the database or
+the state store (Redis, if configured) doesn't answer a ping within 2 seconds, with the failing
+check named in the response. `oxidle_store_up{store="database"|"state"}` reports the same on
+`/metrics`, which keeps answering when a store is down.
+
+**Shutdown.** On SIGTERM (or Ctrl-C) oxidle stops leasing queue items and reports not ready,
+then gives in-flight steps most of the `--shutdown-timeout` budget to finish (HTTP stays up
+meanwhile, since SDKs call back into the API to finish a step). Steps still running at that
+point are handed back to the queue, so another node starts them at once instead of after the
+30 s lease expires; such a step runs again, as Inngest's at-least-once steps allow. Then HTTP
+stops accepting connections, every event already accepted is routed to its functions, and run
+timelines are flushed. A crash (SIGKILL, OOM) skips all of this: in-flight steps rerun when
+their lease expires, and events accepted but not yet routed are not recovered.
+
+**Retention.** Every minute one node (chosen by a lease in the shared state store) deletes
+history older than `--retention-days`: finished runs with their timelines, then events that no
+remaining run refers to (so a run sleeping past the retention period keeps its trigger event),
+plus finished run state and expired queue, idempotency and pause markers. Deletes run in
+transactions of 5,000 rows with a time budget per pass, so a backlog is worked off over several
+passes. `oxidle_retention_deleted_rows_total{table}` counts what was removed. No external
+cleanup job is needed.
+
+**Migrations** run at startup. On Postgres an advisory lock serializes nodes that start
+together, and each migration runs in a transaction, so a failed migration leaves nothing
+half-applied and is retried on the next start. A normal Deployment with surge rollouts works;
+no ordered startup is needed.
+
+**Kubernetes.** Point the readiness probe at `/ready` and the liveness probe at `/health`. Set
+`terminationGracePeriodSeconds` a few seconds above `--shutdown-timeout` (the defaults, 30 and
+25, fit). A `preStop` sleep of about 5 s lets load balancers drop the pod before SIGTERM arrives.
 
 ## Compatibility
 
@@ -234,6 +271,7 @@ durable endpoints (`POST /v1/checkpoint`), and the `/v2` API.
 ```sh
 cargo test --workspace                          # unit, expression oracle, store conformance (SQLite)
 OXIDLE_TEST_REDIS=redis://127.0.0.1:6379 cargo test --test state_store   # + Redis
+OXIDLE_TEST_POSTGRES=postgres://postgres:pw@127.0.0.1:5432/postgres cargo test   # + Postgres (migrations, retention)
 
 ./e2e/run.sh                     # end-to-end with the real JS SDK (Docker), SQLite
 BACKEND=postgres ./e2e/run.sh    # ... Postgres
@@ -242,6 +280,7 @@ TARGET=inngest ./e2e/run.sh      # same suite against the official inngest/innge
 BENCH=1 N=2000 ./e2e/run.sh      # quick throughput check (combine with BACKEND/TARGET)
 ./bench/matrix.sh                # full oxidle-vs-Inngest benchmark matrix (Docker), see docs/benchmarks.md
 KEEP=1 ./e2e/run.sh              # leave server + app running to explore the dashboard
+./e2e/shutdown.sh                # SIGTERM mid-work: nothing lost, in-flight steps finished or handed back
 ```
 
 The e2e suite (33 scenarios covering every feature above) passes against the official

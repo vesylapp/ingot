@@ -41,6 +41,7 @@ pub fn router(engine: Arc<Engine>) -> Router {
     let router = router
         .route("/health", get(health))
         .route("/metrics", get(metrics))
+        .route("/ready", get(ready))
         .route("/e/{key}", post(events::ingest))
         .route("/e/", post(events::missing_key))
         .route("/e", post(events::missing_key))
@@ -229,4 +230,42 @@ async fn track_http(req: Request, next: Next) -> Response {
         start.elapsed().as_secs_f64(),
     );
     resp
+}
+
+/// Readiness: 503 while shutting down or when either store fails a ping. `/health` stays a
+/// plain liveness check, as in the reference server.
+async fn ready(State(engine): State<AppState>) -> Response {
+    if engine.is_shutting_down() {
+        return json_status(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({ "status": 503, "message": "shutting down" }),
+        );
+    }
+    let timeout = std::time::Duration::from_secs(2);
+    let (database, state) = tokio::join!(
+        tokio::time::timeout(timeout, engine.meta.ping()),
+        tokio::time::timeout(timeout, engine.state.ping()),
+    );
+    let check = |r: Result<anyhow::Result<()>, tokio::time::error::Elapsed>| match r {
+        Ok(Ok(())) => None,
+        Ok(Err(err)) => Some(err.to_string()),
+        Err(_) => Some("timed out".to_string()),
+    };
+    let (database, state) = (check(database), check(state));
+    let checks = json!({
+        "database": database.as_deref().unwrap_or("ok"),
+        "state": state.as_deref().unwrap_or("ok"),
+    });
+    if database.is_some() || state.is_some() {
+        tracing::warn!(%checks, "readiness check failed");
+        return json_status(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({ "status": 503, "message": "store unavailable", "checks": checks }),
+        );
+    }
+    json_status(StatusCode::OK, json!({ "status": 200, "message": "OK", "checks": checks }))
+}
+
+fn json_status(status: StatusCode, body: Value) -> Response {
+    (status, axum::Json(body)).into_response()
 }

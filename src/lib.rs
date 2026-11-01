@@ -46,14 +46,38 @@ pub async fn run(cfg: config::Config) -> anyhow::Result<()> {
     };
 
     let addr = format!("{}:{}", cfg.host, cfg.port);
+    let grace = std::time::Duration::from_secs(cfg.shutdown_timeout_s);
     let (engine, events_rx) = engine::Engine::new(cfg, meta, state);
     engine.start(events_rx).await?;
     let app = api::router(engine.clone());
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(addr = %addr, kind = engine.cfg.server_kind(), "oxidle listening");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+
+    let (stop_http, mut http_stopped) = tokio::sync::watch::channel(false);
+    let mut server = tokio::spawn(async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                let _ = http_stopped.wait_for(|s| *s).await;
+            })
+            .await
+    });
+    tokio::select! {
+        _ = shutdown_signal() => {}
+        res = &mut server => {
+            // The server stopped on its own (e.g. the listener failed).
+            res??;
+            return Ok(());
+        }
+    }
+    engine
+        .shutdown(grace, async {
+            stop_http.send_replace(true);
+            if let Ok(Err(err)) = (&mut server).await {
+                tracing::warn!(error = %err, "HTTP server error during shutdown");
+            }
+        })
+        .await;
+    server.abort();
     Ok(())
 }
 
