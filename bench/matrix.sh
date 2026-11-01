@@ -37,7 +37,8 @@ teardown() {
   docker rm -f bench-app bench-server bench-db bench-pg >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
 }
-trap teardown EXIT
+# KEEP_UP=1 leaves the last session's containers running for inspection.
+[[ -n "${KEEP_UP:-}" ]] || trap teardown EXIT
 
 # CPU time (µs) used so far by the containers that do server work.
 cpu_usec() {
@@ -47,6 +48,16 @@ cpu_usec() {
     total=$((total + v))
   done
   echo "$total"
+}
+
+# Same, per container, as a JSON object {"bench-server": µs, ...}.
+cpu_json() {
+  local c v out="{}"
+  for c in "$@"; do
+    v=$(docker exec "$c" sh -c 'grep ^usage_usec /sys/fs/cgroup/cpu.stat' | awk '{print $2}')
+    out=$(jq -c --arg c "$c" --argjson v "$v" '. + {($c): $v}' <<<"$out")
+  done
+  echo "$out"
 }
 
 # Background sampler: peak anonymous memory (bytes) of the server container, written to $1.
@@ -125,11 +136,16 @@ for target in $TARGETS; do
         spec=${spec/:/ }
         set -- $spec
         c0=$(cpu_usec "${workers[@]}")
+        j0=$(cpu_json "${workers[@]}" bench-app)
         line=$(bench "$1" "$2")
         c1=$(cpu_usec "${workers[@]}")
+        j1=$(cpu_json "${workers[@]}" bench-app)
+        # cpu_ms_per_run counts server + databases; cpu_ms_by_container also shows the SDK app.
         echo "$line" | jq -c --arg t "$target" --arg b "$backend" --arg v "$version" \
-          --argjson rep "$rep" --argjson cpu "$((c1 - c0))" \
-          '. + {target: $t, backend: $b, version: $v, rep: $rep, cpu_ms_per_run: (if .done > 0 then ($cpu / 1000) / .done * 1000 | round / 1000 else null end)}' \
+          --argjson rep "$rep" --argjson cpu "$((c1 - c0))" --argjson j0 "$j0" --argjson j1 "$j1" \
+          '. + {target: $t, backend: $b, version: $v, rep: $rep,
+                cpu_ms_per_run: (if .done > 0 then ($cpu / 1000) / .done * 1000 | round / 1000 else null end),
+                cpu_ms_by_container: (. as $r | if .done > 0 then ($j1 | with_entries(.value = ((.value - $j0[.key]) / 1000 / $r.done * 1000 | round / 1000))) else null end)}' \
           | tee -a "$OUT"
       done
     done

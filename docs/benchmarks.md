@@ -178,10 +178,87 @@ python3 bench/report.py bench/results/<file>.jsonl     # regenerate charts + the
 ```
 
 Knobs: `N` (events per throughput run), `REPS`, `RATE` / `DURATION` (latency run),
-`INNGEST_IMAGE`, `SERVER_ARGS` (extra flags for both servers), `SPECS` (sessions separated by
-`|`, each on a fresh server; default `"throughput:one throughput:three|latency:three"`). The raw results behind this page are in
+`INNGEST_IMAGE`, `SERVER_ARGS` (extra flags for both servers), `SERVER_DOCKER_ARGS` (extra
+`docker run` flags for the server), `KEEP_UP=1` (leave the last session running), `SPECS`
+(sessions separated by `|`, each on a fresh server; default
+`"throughput:one throughput:three|latency:three"`). The raw results behind this page are in
 `bench/results/matrix.jsonl`; each run also saves the server logs next to its results file
 (`<name>-<target>-<backend>-<session>.log`, not committed).
 
 For a quicker check against a server running on the host, `BENCH=1 ./e2e/run.sh` runs the same
 throughput workload through the e2e harness.
+
+## Why oxidle is faster
+
+The biggest driver is how much database work each run does: **Inngest makes about 46 database
+commits per 3-step run; oxidle makes about 3.**
+
+Measured on the Redis + Postgres setup (the most like-for-like comparison): 1,000 three-step runs
+plus the 200 no-step warm-up runs, counted from Postgres's own statistics and exact row counts
+afterwards.
+
+| | Postgres commits | Rows written | Redis commands |
+|---|--:|--:|--:|
+| oxidle 0.1.0 | 3,857 | ~7,800 (4,200 timeline spans, events, runs) | 78K |
+| Inngest 1.49.0 | 54,865 | ~29,600 (13,800 spans, 6,000 history, 3,800 traces, events, runs, …) | 171K |
+
+Inngest writes each trace span and history entry as it happens, mostly in its own transaction.
+oxidle stores less telemetry (4 timeline rows per 3-step run: one per step plus finalization,
+which is what the dashboard needs) and hands those rows to a background writer that batches them
+into a few commits, off the execution path. That one difference explains most of the gap:
+
+- **On SQLite and Redis-only setups**, every commit is synced to disk, at about 0.6 ms per sync
+  on this machine. 46 commits at several syncs each comes to roughly 80–100 ms per run, which
+  predicts the ~10 runs/s measured. Moving Inngest's SQLite file to RAM takes it to ~300 runs/s.
+- **On Postgres setups**, the commits show up as database CPU instead.
+
+### Where the CPU goes
+
+CPU per completed 3-step run, by container, on Redis + Postgres. One representative repetition
+each; Inngest's other repetition hit the connection churn described above.
+
+| CPU per run (ms) | Server | Postgres | Redis | SDK app |
+|---|--:|--:|--:|--:|
+| oxidle 0.1.0 (893 runs/s) | 0.53 | 0.70 | 0.13 | 1.58 |
+| Inngest 1.49.0 (222 runs/s) | 9.19 | 18.50 | 1.04 | 3.71 |
+
+- **Postgres** is Inngest's largest cost, about two-thirds of its server-side CPU, against 0.7 ms
+  for oxidle.
+- **The server process itself** is the second driver: 9.2 ms against 0.55 ms (about 17×), covering
+  Inngest's tracing pipeline, capacity checks and roughly twice as many Redis calls. Together
+  with the database work, Inngest's server side is near this machine's CPU limit at ~220 runs/s.
+- **oxidle is not the bottleneck in its own numbers.** Its server and databases use about 1.4 ms
+  per run, roughly 1.2 of 10 cores at ~900 runs/s, while the Node SDK app uses more CPU per run
+  than oxidle's server does. The oxidle figures on this page are a floor, set largely by the test
+  app, not oxidle's ceiling.
+
+### Latency
+
+Latency is driven differently. Inngest checks its queue on a timer (`--tick`, 150 ms by
+default), while oxidle wakes a worker as soon as work is queued. Polling explains part of
+Inngest's ~240 ms idle latency: with `--tick 10` its median dropped from 238 to 168 ms
+(p95 391 → 286 ms). The rest is per-step work, including the synchronous writes above.
+
+### Trade-offs
+
+- **Part of the gap is oxidle doing less.** It doesn't keep Inngest's per-event `history` table
+  or its detailed OpenTelemetry spans, so tools that read those wouldn't find them.
+- **oxidle's SQLite setting trades some durability for speed.** With WAL and
+  `synchronous=NORMAL`, a power loss (not a process crash) can lose the last few commits, though
+  the file won't be corrupted. Inngest syncs SQLite fully on every commit.
+
+### Reproducing the breakdown
+
+Every result line from `bench/matrix.sh` includes `cpu_ms_by_container`. To inspect the databases
+after a run, keep the last session's containers up:
+
+```sh
+KEEP_UP=1 TARGETS=inngest BACKENDS=redis-postgres SPECS="throughput:three" N=1000 REPS=1 ./bench/matrix.sh
+docker exec bench-pg psql -U postgres -c "select xact_commit from pg_stat_database where datname='postgres'"
+docker exec bench-db redis-cli info stats | grep total_commands_processed
+docker rm -f bench-app bench-server bench-db bench-pg && docker network rm oxbench
+```
+
+Postgres's statistics counters lag a little behind the transactions, so wait a few seconds after
+the run before reading them. For the latency check, add `SERVER_ARGS="--tick 10"`; for the RAM-disk
+SQLite test, `SERVER_DOCKER_ARGS="--tmpfs /tmp/db"`.
