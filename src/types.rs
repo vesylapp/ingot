@@ -337,9 +337,15 @@ pub struct RunRecord {
     pub cron: Option<String>,
     pub original_run_id: Option<Ulid>,
     pub status: RunStatus,
+    /// When the run was scheduled (queued).
     pub started_at: i64,
     pub ended_at: Option<i64>,
     pub output: Option<Value>,
+    #[serde(default)]
+    pub event_name: Option<String>,
+    /// When the run first started executing.
+    #[serde(default)]
+    pub exec_started_at: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -485,4 +491,7 @@ pub struct Pause {
     /// Job id of the timeout queue item.
     pub timeout_job: Option<String>,
     pub correlation_id: Option<String>,
+    /// Step info recorded on the run timeline when the pause was created.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span_info: Option<Value>,
 }

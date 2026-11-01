@@ -145,6 +145,7 @@ async fn list_events(State(engine): State<AppState>, Query(q): Query<EventsQuery
         received_before: Some(before),
         limit: q.limit.unwrap_or(20).clamp(1, 51),
         include_internal: false,
+        ..Default::default()
     };
     match engine.meta.list_events(&query).await {
         Ok(evts) => envelope(Value::Array(evts.iter().map(event_json).collect())),
@@ -331,6 +332,7 @@ async fn create_cancellation(State(engine): State<AppState>, body: Bytes) -> Res
                     status: Some(RunStatus::Running),
                     cursor,
                     limit: 500,
+                    ..Default::default()
                 })
                 .await
             {
@@ -409,6 +411,19 @@ async fn save_checkpoint_steps(engine: &AppState, run_id: Ulid, steps: &[Value])
                 let v = if op == "Step" { data } else { json!({ "data": data }) };
                 if let Err(e) = engine.state.save_step(run_id, id, &v).await {
                     return Err(super::internal(e));
+                }
+                if let Ok(op) = serde_json::from_value::<crate::engine::driver::Op>(s.clone()) {
+                    let now = now_ms();
+                    let (start, end) = op.timing_ms().unwrap_or((now, now));
+                    engine.trace.span(crate::store::Span {
+                        status: Some(crate::engine::trace::status::COMPLETED.into()),
+                        attempts: Some(1),
+                        queued_at: Some(start),
+                        started_at: Some(start),
+                        ended_at: Some(end),
+                        output: Some(v.clone()),
+                        ..engine.step_span(run_id, &op)
+                    });
                 }
             }
             "StepPlanned" | "DeferAdd" | "DeferAbort" => {}

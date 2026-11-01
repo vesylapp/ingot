@@ -11,6 +11,7 @@ pub mod sql;
 use crate::types::*;
 use anyhow::Result;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ulid::Ulid;
 use uuid::Uuid;
@@ -18,6 +19,8 @@ use uuid::Uuid;
 #[derive(Debug, Default, Clone)]
 pub struct EventQuery {
     pub name: Option<String>,
+    /// Match any of these names (in addition to `name`).
+    pub names: Vec<String>,
     pub cursor: Option<Ulid>,
     pub received_after: Option<i64>,
     pub received_before: Option<i64>,
@@ -29,8 +32,46 @@ pub struct EventQuery {
 pub struct RunQuery {
     pub fn_id: Option<Uuid>,
     pub status: Option<RunStatus>,
+    /// Return runs with run_id < cursor (ordered by run_id desc).
     pub cursor: Option<Ulid>,
     pub limit: i64,
+    // Dashboard filters.
+    pub app_ids: Vec<Uuid>,
+    /// Dashboard statuses: COMPLETED, FAILED, CANCELLED, SKIPPED, RUNNING, QUEUED.
+    pub ui_statuses: Vec<String>,
+    pub time_field: RunTimeField,
+    pub from: Option<i64>,
+    pub until: Option<i64>,
+    /// Keyset cursor (time, run_id) when ordering by `time_field` desc.
+    pub page_cursor: Option<(i64, Ulid)>,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum RunTimeField {
+    #[default]
+    Queued,
+    Started,
+    Ended,
+}
+
+/// A span in a run's timeline (step, attempt, finalization). Absent fields are left
+/// unchanged on upsert; `queued_at`/`started_at` keep their first value.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Span {
+    pub run_id: Ulid,
+    pub span_id: String,
+    pub parent_id: Option<String>,
+    pub name: Option<String>,
+    pub op: Option<String>,
+    pub step_id: Option<String>,
+    pub step_type: Option<String>,
+    pub status: Option<String>,
+    pub attempts: Option<i64>,
+    pub queued_at: Option<i64>,
+    pub started_at: Option<i64>,
+    pub ended_at: Option<i64>,
+    pub info: Option<Value>,
+    pub output: Option<Value>,
 }
 
 #[async_trait]
@@ -67,6 +108,14 @@ pub trait MetaStore: Send + Sync {
     async fn list_runs(&self, q: &RunQuery) -> Result<Vec<RunRecord>>;
     /// Delete events and finished run history older than `before` (ms).
     async fn prune(&self, before: i64) -> Result<()>;
+
+    async fn count_runs(&self, q: &RunQuery) -> Result<i64>;
+    async fn count_events(&self, q: &EventQuery) -> Result<i64>;
+    /// Record when a run first started executing.
+    async fn mark_run_started(&self, run_id: Ulid, at: i64) -> Result<()>;
+    async fn upsert_spans(&self, spans: &[Span]) -> Result<()>;
+    /// All spans of a run in creation order.
+    async fn run_spans(&self, run_id: Ulid) -> Result<Vec<Span>>;
 }
 
 pub enum CreateRun {

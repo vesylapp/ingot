@@ -223,6 +223,7 @@ fn pause(kind: PauseKind, run_id: Ulid, step: &str, event: Option<&str>, expires
         created_at: now_ms(),
         timeout_job: Some(format!("{run_id}-{step}-timeout")),
         correlation_id: None,
+        span_info: None,
     }
 }
 

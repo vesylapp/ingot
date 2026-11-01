@@ -193,6 +193,34 @@ CREATE TABLE IF NOT EXISTS batch_events (
 );
 "#;
 
+/// Schema migrations, applied in order. Never edit a released entry; append a new one.
+const MIGRATIONS: &[&str] = &[SCHEMA, SCHEMA_V2];
+
+const SCHEMA_V2: &str = r#"
+ALTER TABLE function_runs ADD COLUMN event_name TEXT;
+ALTER TABLE function_runs ADD COLUMN exec_started_at BIGINT;
+CREATE INDEX IF NOT EXISTS function_runs_queued ON function_runs(started_at, run_id);
+CREATE INDEX IF NOT EXISTS function_runs_app ON function_runs(app_id, started_at);
+CREATE TABLE IF NOT EXISTS run_spans (
+  run_id TEXT NOT NULL,
+  span_id TEXT NOT NULL,
+  parent_id TEXT,
+  name TEXT,
+  op TEXT,
+  step_id TEXT,
+  step_type TEXT,
+  status TEXT,
+  attempts BIGINT,
+  queued_at BIGINT,
+  started_at BIGINT,
+  ended_at BIGINT,
+  info TEXT,
+  output TEXT,
+  seq BIGINT NOT NULL,
+  PRIMARY KEY (run_id, span_id)
+)
+"#;
+
 fn ulid_s(u: Ulid) -> String {
     u.to_string()
 }
@@ -258,11 +286,28 @@ impl SqlStore {
     }
 
     async fn migrate(&self) -> Result<()> {
-        for stmt in SCHEMA.split(';').map(str::trim).filter(|s| !s.is_empty()) {
-            sqlx::query(stmt)
+        sqlx::query("CREATE TABLE IF NOT EXISTS schema_migrations (version BIGINT PRIMARY KEY)")
+            .execute(&self.pool)
+            .await?;
+        let current: i64 = sqlx::query("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations")
+            .fetch_one(&self.pool)
+            .await?
+            .try_get("v")?;
+        for (i, migration) in MIGRATIONS.iter().enumerate() {
+            let version = i as i64 + 1;
+            if version <= current {
+                continue;
+            }
+            for stmt in migration.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+                sqlx::query(stmt)
+                    .execute(&self.pool)
+                    .await
+                    .with_context(|| format!("migration {version} failed: {stmt}"))?;
+            }
+            sqlx::query("INSERT INTO schema_migrations (version) VALUES ($1)")
+                .bind(version)
                 .execute(&self.pool)
-                .await
-                .with_context(|| format!("migration failed: {stmt}"))?;
+                .await?;
         }
         Ok(())
     }
@@ -376,6 +421,31 @@ fn row_run(r: &AnyRow) -> Result<RunRecord> {
         started_at: r.try_get("started_at")?,
         ended_at: r.try_get("ended_at")?,
         output: output.map(|o| serde_json::from_str(&o).unwrap_or(Value::String(o))),
+        event_name: r.try_get("event_name")?,
+        exec_started_at: r.try_get("exec_started_at")?,
+    })
+}
+
+fn row_span(r: &AnyRow) -> Result<Span> {
+    let json = |col: &str| -> Result<Option<Value>> {
+        let v: Option<String> = r.try_get(col)?;
+        Ok(v.and_then(|s| serde_json::from_str(&s).ok()))
+    };
+    Ok(Span {
+        run_id: parse_ulid(&r.try_get::<String, _>("run_id")?)?,
+        span_id: r.try_get("span_id")?,
+        parent_id: r.try_get("parent_id")?,
+        name: r.try_get("name")?,
+        op: r.try_get("op")?,
+        step_id: r.try_get("step_id")?,
+        step_type: r.try_get("step_type")?,
+        status: r.try_get("status")?,
+        attempts: r.try_get("attempts")?,
+        queued_at: r.try_get("queued_at")?,
+        started_at: r.try_get("started_at")?,
+        ended_at: r.try_get("ended_at")?,
+        info: json("info")?,
+        output: json("output")?,
     })
 }
 
@@ -404,7 +474,142 @@ fn row_pause(r: &AnyRow) -> Result<Pause> {
 }
 
 const ITEM_COLS: &str = "id, kind, run_id, fn_id, at, attempt, max_attempts, payload, dedupe, lease_id";
-const RUN_COLS: &str = "run_id, fn_id, fn_slug, app_id, fn_version, event_id, batch_id, cron, original_run_id, started_at, status, ended_at, output";
+const RUN_COLS: &str = "run_id, fn_id, fn_slug, app_id, fn_version, event_id, batch_id, cron, original_run_id, started_at, status, ended_at, output, event_name, exec_started_at";
+
+#[derive(Debug, Clone)]
+enum Bind {
+    I(i64),
+    S(String),
+}
+
+fn bind_all<'q>(
+    mut q: sqlx::query::Query<'q, Any, sqlx::any::AnyArguments<'q>>,
+    binds: &'q [Bind],
+) -> sqlx::query::Query<'q, Any, sqlx::any::AnyArguments<'q>> {
+    for b in binds {
+        q = match b {
+            Bind::I(i) => q.bind(*i),
+            Bind::S(s) => q.bind(s.as_str()),
+        };
+    }
+    q
+}
+
+struct Where {
+    clauses: Vec<String>,
+    binds: Vec<Bind>,
+}
+
+impl Where {
+    fn new() -> Where {
+        Where { clauses: vec![], binds: vec![] }
+    }
+    fn p(&mut self, b: Bind) -> String {
+        self.binds.push(b);
+        format!("${}", self.binds.len())
+    }
+    fn finish(self) -> (String, Vec<Bind>) {
+        let sql = if self.clauses.is_empty() {
+            "1=1".to_string()
+        } else {
+            self.clauses.join(" AND ")
+        };
+        (sql, self.binds)
+    }
+}
+
+fn run_where(q: &RunQuery, with_cursor: bool) -> (String, Vec<Bind>) {
+    let mut w = Where::new();
+    let col = match q.time_field {
+        RunTimeField::Queued => "started_at",
+        RunTimeField::Started => "exec_started_at",
+        RunTimeField::Ended => "ended_at",
+    };
+    if let Some(f) = q.fn_id {
+        let p = w.p(Bind::S(f.to_string()));
+        w.clauses.push(format!("fn_id = {p}"));
+    }
+    if let Some(s) = q.status {
+        let p = w.p(Bind::S(s.as_str().into()));
+        w.clauses.push(format!("status = {p}"));
+    }
+    if !q.app_ids.is_empty() {
+        let ps: Vec<String> = q.app_ids.iter().map(|a| w.p(Bind::S(a.to_string()))).collect();
+        w.clauses.push(format!("app_id IN ({})", ps.join(", ")));
+    }
+    if !q.ui_statuses.is_empty() {
+        let mut ors = Vec::new();
+        for st in &q.ui_statuses {
+            match st.as_str() {
+                "RUNNING" => ors.push("(status = 'Running' AND exec_started_at IS NOT NULL)".to_string()),
+                "QUEUED" => ors.push("(status = 'Running' AND exec_started_at IS NULL)".to_string()),
+                other => {
+                    let s = match other {
+                        "COMPLETED" => "Completed",
+                        "FAILED" => "Failed",
+                        "CANCELLED" => "Cancelled",
+                        "SKIPPED" => "Skipped",
+                        _ => continue,
+                    };
+                    let p = w.p(Bind::S(s.into()));
+                    ors.push(format!("status = {p}"));
+                }
+            }
+        }
+        if !ors.is_empty() {
+            w.clauses.push(format!("({})", ors.join(" OR ")));
+        }
+    }
+    if let Some(from) = q.from {
+        let p = w.p(Bind::I(from));
+        w.clauses.push(format!("{col} >= {p}"));
+    }
+    if let Some(until) = q.until {
+        let p = w.p(Bind::I(until));
+        w.clauses.push(format!("{col} <= {p}"));
+    }
+    if with_cursor {
+        if let Some(c) = q.cursor {
+            let p = w.p(Bind::S(c.to_string()));
+            w.clauses.push(format!("run_id < {p}"));
+        }
+        if let Some((t, id)) = q.page_cursor {
+            let pt = w.p(Bind::I(t));
+            let pt2 = w.p(Bind::I(t));
+            let pid = w.p(Bind::S(id.to_string()));
+            w.clauses.push(format!("({col} < {pt} OR ({col} = {pt2} AND run_id < {pid}))"));
+        }
+    }
+    w.finish()
+}
+
+fn event_where(q: &EventQuery, with_cursor: bool) -> (String, Vec<Bind>) {
+    let mut w = Where::new();
+    let mut names: Vec<&String> = q.names.iter().collect();
+    if let Some(n) = &q.name {
+        names.push(n);
+    }
+    if !names.is_empty() {
+        let ps: Vec<String> = names.iter().map(|n| w.p(Bind::S((*n).clone()))).collect();
+        w.clauses.push(format!("name IN ({})", ps.join(", ")));
+    }
+    if with_cursor && let Some(c) = q.cursor {
+        let p = w.p(Bind::S(c.to_string()));
+        w.clauses.push(format!("internal_id < {p}"));
+    }
+    if let Some(a) = q.received_after {
+        let p = w.p(Bind::I(a));
+        w.clauses.push(format!("received_at >= {p}"));
+    }
+    if let Some(b) = q.received_before {
+        let p = w.p(Bind::I(b));
+        w.clauses.push(format!("received_at <= {p}"));
+    }
+    if !q.include_internal {
+        w.clauses.push("name NOT LIKE 'inngest/%'".into());
+    }
+    w.finish()
+}
 
 // ---------------------------------------------------------------------------
 // MetaStore
@@ -574,50 +779,19 @@ impl MetaStore for SqlStore {
     }
 
     async fn list_events(&self, q: &EventQuery) -> Result<Vec<TrackedEvent>> {
-        let mut sql = String::from("SELECT * FROM events WHERE 1=1");
-        let mut n = 0;
-        let mut p = || {
-            n += 1;
-            format!("${n}")
-        };
-        if q.name.is_some() {
-            sql += &format!(" AND name = {}", p());
-        }
-        if q.cursor.is_some() {
-            sql += &format!(" AND internal_id < {}", p());
-        }
-        if q.received_after.is_some() {
-            sql += &format!(" AND received_at >= {}", p());
-        }
-        if q.received_before.is_some() {
-            sql += &format!(" AND received_at <= {}", p());
-        }
-        if !q.include_internal {
-            sql += " AND name NOT LIKE 'inngest/%'";
-        }
-        sql += &format!(" ORDER BY internal_id DESC LIMIT {}", p());
-        let mut query = sqlx::query(&sql);
-        if let Some(name) = &q.name {
-            query = query.bind(name.clone());
-        }
-        if let Some(c) = q.cursor {
-            query = query.bind(ulid_s(c));
-        }
-        if let Some(a) = q.received_after {
-            query = query.bind(a);
-        }
-        if let Some(b) = q.received_before {
-            query = query.bind(b);
-        }
-        query = query.bind(q.limit);
-        let rows = query.fetch_all(&self.pool).await?;
+        let (where_sql, binds) = event_where(q, true);
+        let sql = format!(
+            "SELECT * FROM events WHERE {where_sql} ORDER BY internal_id DESC LIMIT {}",
+            q.limit.max(1)
+        );
+        let rows = bind_all(sqlx::query(&sql), &binds).fetch_all(&self.pool).await?;
         rows.iter().map(row_event).collect()
     }
 
     async fn insert_run(&self, r: &RunRecord) -> Result<()> {
         sqlx::query(
-            "INSERT INTO function_runs (run_id, fn_id, fn_slug, app_id, fn_version, event_id, batch_id, cron, original_run_id, started_at, status, ended_at, output)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (run_id) DO NOTHING",
+            "INSERT INTO function_runs (run_id, fn_id, fn_slug, app_id, fn_version, event_id, batch_id, cron, original_run_id, started_at, status, ended_at, output, event_name, exec_started_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) ON CONFLICT (run_id) DO NOTHING",
         )
         .bind(ulid_s(r.run_id))
         .bind(r.fn_id.to_string())
@@ -632,6 +806,8 @@ impl MetaStore for SqlStore {
         .bind(r.status.as_str())
         .bind(r.ended_at)
         .bind(r.output.as_ref().map(to_json))
+        .bind(r.event_name.clone())
+        .bind(r.exec_started_at)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -685,35 +861,95 @@ impl MetaStore for SqlStore {
     }
 
     async fn list_runs(&self, q: &RunQuery) -> Result<Vec<RunRecord>> {
-        let mut sql = format!("SELECT {RUN_COLS} FROM function_runs WHERE 1=1");
-        let mut n = 0;
-        let mut p = || {
-            n += 1;
-            format!("${n}")
+        let (where_sql, binds) = run_where(q, true);
+        let order = match q.time_field {
+            RunTimeField::Queued => "started_at DESC, run_id DESC",
+            RunTimeField::Started => "exec_started_at DESC, run_id DESC",
+            RunTimeField::Ended => "ended_at DESC, run_id DESC",
         };
-        if q.fn_id.is_some() {
-            sql += &format!(" AND fn_id = {}", p());
-        }
-        if q.status.is_some() {
-            sql += &format!(" AND status = {}", p());
-        }
-        if q.cursor.is_some() {
-            sql += &format!(" AND run_id < {}", p());
-        }
-        sql += &format!(" ORDER BY run_id DESC LIMIT {}", p());
-        let mut query = sqlx::query(&sql);
-        if let Some(f) = q.fn_id {
-            query = query.bind(f.to_string());
-        }
-        if let Some(s) = q.status {
-            query = query.bind(s.as_str());
-        }
-        if let Some(c) = q.cursor {
-            query = query.bind(ulid_s(c));
-        }
-        query = query.bind(q.limit);
-        let rows = query.fetch_all(&self.pool).await?;
+        let sql = format!(
+            "SELECT {RUN_COLS} FROM function_runs WHERE {where_sql} ORDER BY {order} LIMIT {}",
+            q.limit.max(1)
+        );
+        let rows = bind_all(sqlx::query(&sql), &binds).fetch_all(&self.pool).await?;
         rows.iter().map(row_run).collect()
+    }
+
+    async fn count_runs(&self, q: &RunQuery) -> Result<i64> {
+        let (where_sql, binds) = run_where(q, false);
+        let sql = format!("SELECT COUNT(*) AS n FROM function_runs WHERE {where_sql}");
+        let row = bind_all(sqlx::query(&sql), &binds).fetch_one(&self.pool).await?;
+        Ok(row.try_get("n")?)
+    }
+
+    async fn count_events(&self, q: &EventQuery) -> Result<i64> {
+        let (where_sql, binds) = event_where(q, false);
+        let sql = format!("SELECT COUNT(*) AS n FROM events WHERE {where_sql}");
+        let row = bind_all(sqlx::query(&sql), &binds).fetch_one(&self.pool).await?;
+        Ok(row.try_get("n")?)
+    }
+
+    async fn mark_run_started(&self, run_id: Ulid, at: i64) -> Result<()> {
+        sqlx::query("UPDATE function_runs SET exec_started_at = $2 WHERE run_id = $1 AND exec_started_at IS NULL")
+            .bind(ulid_s(run_id))
+            .bind(at)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn upsert_spans(&self, spans: &[Span]) -> Result<()> {
+        if spans.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.tx().await?;
+        for sp in spans {
+            sqlx::query(
+                "INSERT INTO run_spans (run_id, span_id, parent_id, name, op, step_id, step_type, status, attempts,
+                   queued_at, started_at, ended_at, info, output, seq)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                 ON CONFLICT (run_id, span_id) DO UPDATE SET
+                   parent_id = COALESCE(excluded.parent_id, run_spans.parent_id),
+                   name = COALESCE(excluded.name, run_spans.name),
+                   op = COALESCE(excluded.op, run_spans.op),
+                   step_id = COALESCE(excluded.step_id, run_spans.step_id),
+                   step_type = COALESCE(excluded.step_type, run_spans.step_type),
+                   status = COALESCE(excluded.status, run_spans.status),
+                   attempts = COALESCE(excluded.attempts, run_spans.attempts),
+                   queued_at = COALESCE(run_spans.queued_at, excluded.queued_at),
+                   started_at = COALESCE(run_spans.started_at, excluded.started_at),
+                   ended_at = COALESCE(excluded.ended_at, run_spans.ended_at),
+                   info = COALESCE(excluded.info, run_spans.info),
+                   output = COALESCE(excluded.output, run_spans.output)",
+            )
+            .bind(ulid_s(sp.run_id))
+            .bind(&sp.span_id)
+            .bind(sp.parent_id.clone())
+            .bind(sp.name.clone())
+            .bind(sp.op.clone())
+            .bind(sp.step_id.clone())
+            .bind(sp.step_type.clone())
+            .bind(sp.status.clone())
+            .bind(sp.attempts)
+            .bind(sp.queued_at)
+            .bind(sp.started_at)
+            .bind(sp.ended_at)
+            .bind(sp.info.as_ref().map(to_json))
+            .bind(sp.output.as_ref().map(to_json))
+            .bind(self.next_seq())
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn run_spans(&self, run_id: Ulid) -> Result<Vec<Span>> {
+        let rows = sqlx::query("SELECT * FROM run_spans WHERE run_id = $1 ORDER BY seq")
+            .bind(ulid_s(run_id))
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter().map(row_span).collect()
     }
 }
 

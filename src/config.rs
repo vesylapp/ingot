@@ -102,6 +102,10 @@ pub struct ServerArgs {
     #[arg(long, env = "INNGEST_NO_UI")]
     pub no_ui: bool,
 
+    /// Directory with the built dashboard UI (default: ./ui/dist, then <binary dir>/ui).
+    #[arg(long, env = "OXIDLE_UI_DIR")]
+    pub ui_dir: Option<String>,
+
     /// Days to retain finished run state and events (0 = forever).
     #[arg(long, env = "OXIDLE_RETENTION_DAYS", default_value_t = 7)]
     pub retention_days: u64,
@@ -126,6 +130,7 @@ pub struct Config {
     pub queue_workers: usize,
     pub tick_ms: u64,
     pub no_ui: bool,
+    pub ui_dir: Option<String>,
     pub dev: bool,
     pub retention_days: u64,
 }
@@ -179,6 +184,7 @@ impl Config {
             queue_workers: a.queue_workers.max(1),
             tick_ms: a.tick.max(10),
             no_ui: a.no_ui,
+            ui_dir: a.ui_dir,
             dev,
             retention_days: a.retention_days,
         })

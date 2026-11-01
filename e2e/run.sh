@@ -100,6 +100,10 @@ docker exec -e TARGET="$TARGET" -e ONLY="${ONLY:-}" -e CRON="${CRON:-}" -e APP_U
   -e INNGEST_SIGNING_KEY="$SIGNING_KEY" -e INNGEST_EVENT_KEY="$EVENT_KEY" \
   oxidle-e2e-app node test.mjs
 STATUS=$?
+if [[ -n "${KEEP:-}" ]]; then
+  echo "environment kept up: dashboard at http://localhost:$PORT (Ctrl-C to stop)"
+  while true; do sleep 3600; done
+fi
 if [[ $STATUS -ne 0 ]]; then
   if [[ "$TARGET" == "inngest" ]]; then docker logs --tail "${LOG_LINES:-60}" oxidle-e2e-ref 2>&1
   else echo "--- server log tail ---"; tail -n "${LOG_LINES:-60}" "$LOG"; fi

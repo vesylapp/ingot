@@ -5,10 +5,12 @@ pub mod driver;
 pub mod events;
 pub mod execute;
 pub mod finalize;
+pub mod ops;
 pub mod pauses;
 pub mod registry;
 pub mod schedule;
 pub mod sync;
+pub mod trace;
 pub mod worker;
 
 use crate::auth::SigningKey;
@@ -36,6 +38,7 @@ pub struct Engine {
     pub exprs: ExprCache,
     /// Wakes queue workers when new work is enqueued locally.
     pub queue_notify: Notify,
+    pub trace: trace::Tracer,
     events_tx: mpsc::Sender<Vec<TrackedEvent>>,
 }
 
@@ -55,6 +58,7 @@ impl Engine {
         let signing = cfg.signing_key.as_deref().map(SigningKey::new);
         let engine = Arc::new(Engine {
             registry: Registry::new(meta.clone()),
+            trace: trace::Tracer::spawn(meta.clone()),
             cfg,
             meta,
             state,
@@ -129,6 +133,13 @@ impl Engine {
         if self.events_tx.send(events).await.is_err() {
             tracing::error!("event router channel closed");
         }
+    }
+
+    /// Persist and route already-identified events.
+    pub async fn publish_tracked(&self, events: Vec<TrackedEvent>) -> anyhow::Result<()> {
+        self.meta.insert_events(&events).await?;
+        self.route_events(events).await;
+        Ok(())
     }
 
     /// Persist and route internally generated events.

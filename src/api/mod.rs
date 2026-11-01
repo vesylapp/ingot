@@ -1,6 +1,7 @@
 //! HTTP API: event ingestion, registration, the v0/v1 REST APIs.
 
 mod events;
+pub mod gql;
 mod register;
 mod v0;
 mod v1;
@@ -32,7 +33,12 @@ pub fn router(engine: Arc<Engine>) -> Router {
         .route_layer(middleware::from_fn_with_state(engine.clone(), signing_key_auth));
 
     let kind = HeaderValue::from_static(engine.cfg.server_kind());
-    Router::new()
+    let mut router = Router::new();
+    if !engine.cfg.no_ui {
+        let schema = gql::schema(engine.clone());
+        router = router.route_service("/v0/gql", post(gql::handler).with_state(schema));
+    }
+    let router = router
         .route("/health", get(health))
         .route("/e/{key}", post(events::ingest))
         .route("/e/", post(events::missing_key))
@@ -40,8 +46,19 @@ pub fn router(engine: Arc<Engine>) -> Router {
         .route("/invoke/{slug}", post(events::invoke))
         .route("/dev", get(dev_info))
         .route("/v0/telemetry", post(ok_empty))
-        .merge(authed)
-        .fallback(not_found)
+        .merge(authed);
+    let router = match ui_dir(&engine) {
+        Some(dir) => {
+            tracing::info!(dir = %dir.display(), "serving dashboard UI");
+            let shell = dir.join("_shell.html");
+            router.fallback_service(
+                tower_http::services::ServeDir::new(&dir)
+                    .fallback(tower_http::services::ServeFile::new(shell)),
+            )
+        }
+        None => router.fallback(not_found),
+    };
+    router
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .layer(
             CorsLayer::new()
@@ -66,6 +83,30 @@ pub fn router(engine: Arc<Engine>) -> Router {
             }
         }))
         .with_state(engine)
+}
+
+/// Directory holding the built dashboard UI, if enabled and present.
+fn ui_dir(engine: &Engine) -> Option<std::path::PathBuf> {
+    if engine.cfg.no_ui {
+        return None;
+    }
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    match &engine.cfg.ui_dir {
+        Some(d) => candidates.push(d.into()),
+        None => {
+            candidates.push("ui/dist".into());
+            if let Ok(exe) = std::env::current_exe()
+                && let Some(parent) = exe.parent()
+            {
+                candidates.push(parent.join("ui"));
+            }
+        }
+    }
+    let found = candidates.into_iter().find(|d| d.join("_shell.html").is_file());
+    if found.is_none() {
+        tracing::warn!("dashboard UI assets not found (build them with ./ui/build.sh or set --ui-dir)");
+    }
+    found
 }
 
 async fn signing_key_auth(State(engine): State<AppState>, req: Request, next: Next) -> Response {
@@ -99,8 +140,17 @@ async fn not_found() -> Response {
 }
 
 async fn dev_info(State(engine): State<AppState>) -> Response {
+    let features = json!({ "FEATURE_EVENTS": true, "FEATURE_CEL_SEARCH": false });
     if !engine.cfg.dev {
-        return not_found().await;
+        // Self-hosted: only what the dashboard needs (no function configs or options).
+        return json_response(
+            StatusCode::OK,
+            &json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "isSingleNodeService": false,
+                "features": features,
+            }),
+        );
     }
     let fns: Vec<Value> = engine
         .registry
@@ -119,7 +169,7 @@ async fn dev_info(State(engine): State<AppState>) -> Response {
             "startOpts": { "dev": true, "sdkURLs": engine.cfg.sdk_urls },
             "functions": fns,
             "handlers": [],
-            "features": {},
+            "features": features,
         }),
     )
 }

@@ -217,29 +217,9 @@ pub async fn invoke(
             Err(e) => return public_error(StatusCode::BAD_REQUEST, &e.to_string()),
         }
     };
-    let Some(f) = engine.registry.by_slug(&slug) else {
-        return public_error(StatusCode::NOT_FOUND, &format!("function not found: {slug}"));
-    };
-    let mut data = ev.data.clone();
-    data.remove("_inngest");
-    data.insert(
-        "_inngest".into(),
-        json!({ "fn_id": f.slug, "correlation_id": "", "expire": 0, "gid": "", "name": "", "source_app_id": "", "source_fn_id": "", "source_fn_v": 0 }),
-    );
-    let evt = Event {
-        id: ev.id,
-        name: EVENT_FN_INVOKED.into(),
-        data,
-        user: ev.user,
-        ts: ev.ts,
-        v: ev.v,
-        meta: None,
-    };
-    match engine.publish_internal(vec![evt]).await {
-        Ok(t) => json_response(
-            StatusCode::OK,
-            &json!({ "id": t[0].internal_id.to_string(), "status": 200 }),
-        ),
+    match engine.invoke_function(&slug, ev).await {
+        Ok(Some(id)) => json_response(StatusCode::OK, &json!({ "id": id.to_string(), "status": 200 })),
+        Ok(None) => public_error(StatusCode::NOT_FOUND, &format!("function not found: {slug}")),
         Err(e) => super::internal(e),
     }
 }

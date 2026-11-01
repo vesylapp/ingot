@@ -57,7 +57,8 @@ impl Engine {
                     }
                 }
                 PauseKind::WaitForEvent => {
-                    self.resume_pause(&p, evt_json.clone(), "event").await?;
+                    let extra = json!({ "foundEventID": evt.internal_id.to_string(), "timedOut": false });
+                    self.resume_pause(&p, evt_json.clone(), "event", extra).await?;
                 }
                 _ => {}
             }
@@ -66,10 +67,23 @@ impl Engine {
     }
 
     /// Consume a pause with `value` as the step result and continue the run.
-    pub async fn resume_pause(self: &Arc<Self>, p: &Pause, value: Value, suffix: &str) -> anyhow::Result<bool> {
+    pub async fn resume_pause(
+        self: &Arc<Self>,
+        p: &Pause,
+        value: Value,
+        suffix: &str,
+        trace_info: Value,
+    ) -> anyhow::Result<bool> {
         let Some(pending_empty) = self.state.consume_pause(p, Some(&value)).await? else {
             return Ok(false);
         };
+        let wrapped = p.kind != PauseKind::WaitForEvent
+            && value
+                .as_object()
+                .is_some_and(|o| o.contains_key("data") || o.contains_key("error"));
+        let output = if wrapped { value.clone() } else { json!({ "data": value }) };
+        let failed = output.get("error").is_some_and(|e| !e.is_null());
+        self.trace_resolved(p, trace_info, &output, failed);
         if let Some(job) = &p.timeout_job {
             self.state.remove_item(&hash36(job)).await?;
         }
@@ -84,7 +98,12 @@ impl Engine {
     }
 
     /// Resume the caller of `step.invoke` when the invoked run finishes.
-    pub async fn resume_invoke(self: &Arc<Self>, correlation_id: &str, data: &Map<String, Value>) -> anyhow::Result<()> {
+    pub async fn resume_invoke(
+        self: &Arc<Self>,
+        correlation_id: &str,
+        data: &Map<String, Value>,
+        finished_event_id: Ulid,
+    ) -> anyhow::Result<()> {
         let Some((run, step)) = correlation_id.split_once('.') else {
             return Ok(());
         };
@@ -101,7 +120,12 @@ impl Engine {
             Some(e) if !e.is_null() => json!({ "error": e }),
             _ => json!({ "data": data.get("result").cloned().unwrap_or(Value::Null) }),
         };
-        self.resume_pause(&p, value, "event").await?;
+        let extra = json!({
+            "runID": data.get("run_id").and_then(|r| r.as_str()).filter(|r| !r.is_empty()),
+            "returnEventID": finished_event_id.to_string(),
+            "timedOut": false,
+        });
+        self.resume_pause(&p, value, "event", extra).await?;
         Ok(())
     }
 
@@ -109,7 +133,7 @@ impl Engine {
     pub async fn send_signal(self: &Arc<Self>, signal: &str, data: Value) -> anyhow::Result<Option<Ulid>> {
         for p in self.state.pauses_for_signal(signal).await? {
             let value = json!({ "data": { "signal": signal, "data": data } });
-            if self.resume_pause(&p, value, "event").await? {
+            if self.resume_pause(&p, value, "event", json!({ "timedOut": false })).await? {
                 return Ok(Some(p.run_id));
             }
         }
@@ -144,7 +168,7 @@ impl Engine {
             timeout_job: None,
             ..p
         };
-        self.resume_pause(&p, value, "timeout").await?;
+        self.resume_pause(&p, value, "timeout", json!({ "timedOut": true })).await?;
         Ok(Outcome::Done)
     }
 }

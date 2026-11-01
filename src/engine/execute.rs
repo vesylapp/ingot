@@ -2,7 +2,8 @@
 
 use super::driver::{DriverRequest, Op, Response};
 use super::{Engine, LEASE_MS};
-use crate::store::{MetaUpdate, SaveStep};
+use super::trace;
+use crate::store::{MetaUpdate, SaveStep, Span};
 use crate::types::*;
 use crate::util::{backoff_ms, parse_date_ms, parse_duration_ms, parse_timeout_at, sha1_uuid};
 use serde_json::{Map, Value, json};
@@ -130,6 +131,14 @@ impl Engine {
             match self.state.save_step(run_id, &step_id, &Value::Null).await? {
                 SaveStep::NoRun => return Ok(Outcome::Done),
                 SaveStep::Saved { pending_empty, .. } => {
+                    self.trace.span(Span {
+                        run_id,
+                        span_id: step_id.clone(),
+                        status: Some(trace::status::COMPLETED.into()),
+                        ended_at: Some(now_ms()),
+                        output: Some(json!({ "data": null })),
+                        ..Default::default()
+                    });
                     if !pending_empty {
                         return Ok(Outcome::Done);
                     }
@@ -141,6 +150,7 @@ impl Engine {
 
         if state.meta.started_at.is_none() {
             let now = now_ms();
+            self.trace.run_started(run_id, now);
             self.state
                 .update_meta(
                     run_id,
@@ -167,6 +177,7 @@ impl Engine {
             QueueKind::Sleep => "step".to_string(),
             _ => item.str_payload("incoming").unwrap_or("step").to_string(),
         };
+        let t0 = now_ms();
         let result = self
             .call_sdk(DriverRequest {
                 function: f,
@@ -177,6 +188,7 @@ impl Engine {
                 queue_item_id: &item.id,
             })
             .await;
+        let t1 = now_ms();
 
         if let Some(v) = result.request_version
             && state.meta.request_version != v
@@ -196,6 +208,15 @@ impl Engine {
 
         match result.response {
             Response::Complete(output) => {
+                self.trace_finalization(
+                    run_id,
+                    item.attempt,
+                    trace::status::COMPLETED,
+                    true,
+                    t0,
+                    t1,
+                    json!({ "data": output }),
+                );
                 self.finalize(&state.meta, &state.events, RunStatus::Completed, Some(output), None, Some(&item.id))
                     .await?;
                 Ok(Outcome::Done)
@@ -205,7 +226,17 @@ impl Engine {
                 retryable,
                 retry_at,
             } => {
-                if retryable && item.attempt + 1 < item.max_attempts {
+                let retry = retryable && item.attempt + 1 < item.max_attempts;
+                self.trace_finalization(
+                    run_id,
+                    item.attempt,
+                    trace::status::FAILED,
+                    !retry,
+                    t0,
+                    t1,
+                    json!({ "error": error }),
+                );
+                if retry {
                     let at = retry_at.unwrap_or_else(|| {
                         now_ms() + backoff_ms(item.attempt, self.cfg.retry_interval_s)
                     });
@@ -223,10 +254,14 @@ impl Engine {
                 ops,
                 no_retry,
                 retry_at,
-            } => self.handle_ops(f, state, item, ops, no_retry, retry_at).await,
+            } => {
+                self.handle_ops(f, state, item, ops, no_retry, retry_at, (t0, t1))
+                    .await
+            }
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn handle_ops(
         self: &Arc<Self>,
         f: &Arc<Function>,
@@ -235,6 +270,7 @@ impl Engine {
         mut ops: Vec<Op>,
         no_retry: bool,
         retry_at: Option<i64>,
+        (t0, t1): (i64, i64),
     ) -> anyhow::Result<Outcome> {
         let run_id = state.meta.run_id;
         if ops.is_empty() {
@@ -264,8 +300,18 @@ impl Engine {
             for op in ops.iter().filter(|o| o.op == "StepRun" || o.op == "Step") {
                 let v = step_value(op);
                 self.state.save_step(run_id, &op.id, &v).await?;
+                self.trace_step_done(run_id, item, op, trace::status::COMPLETED, t0, t1, &v);
             }
             let output = ops[pos].data.clone().unwrap_or(Value::Null);
+            self.trace_finalization(
+                run_id,
+                0,
+                trace::status::COMPLETED,
+                true,
+                t0,
+                t1,
+                json!({ "data": output }),
+            );
             self.finalize(&state.meta, &state.events, RunStatus::Completed, Some(output), None, Some(&item.id))
                 .await?;
             return Ok(Outcome::Done);
@@ -299,11 +345,15 @@ impl Engine {
         for op in &ops {
             match op.op.as_str() {
                 "StepRun" | "Step" => {
-                    self.step_completed(state, &op.id, &step_value(op), "", is_race(op))
-                        .await?;
+                    let v = step_value(op);
+                    self.trace_step_done(run_id, item, op, trace::status::COMPLETED, t0, t1, &v);
+                    self.step_completed(state, &op.id, &v, "", is_race(op)).await?;
                 }
                 "StepError" => {
+                    let err = op.error.clone().unwrap_or_else(|| err_obj("Error", "step failed"));
+                    let v = json!({ "error": err });
                     if !no_retry && item.attempt + 1 < item.max_attempts {
+                        self.trace_step_done(run_id, item, op, trace::status::QUEUED, t0, t1, &v);
                         let at = retry_at.unwrap_or_else(|| {
                             now_ms() + backoff_ms(item.attempt, self.cfg.retry_interval_s)
                         });
@@ -312,16 +362,21 @@ impl Engine {
                             attempt: item.attempt + 1,
                         });
                     }
-                    let err = op.error.clone().unwrap_or_else(|| err_obj("Error", "step failed"));
-                    self.step_completed(state, &op.id, &json!({ "error": err }), "-failure", false)
-                        .await?;
+                    self.trace_step_done(run_id, item, op, trace::status::FAILED, t0, t1, &v);
+                    self.step_completed(state, &op.id, &v, "-failure", false).await?;
                 }
                 "StepFailed" => {
                     let err = op.error.clone().unwrap_or_else(|| err_obj("Error", "step failed"));
-                    self.step_completed(state, &op.id, &json!({ "error": err }), "-failure", false)
-                        .await?;
+                    let v = json!({ "error": err });
+                    self.trace_step_done(run_id, item, op, trace::status::FAILED, t0, t1, &v);
+                    self.step_completed(state, &op.id, &v, "-failure", false).await?;
                 }
                 "StepPlanned" => {
+                    self.trace.span(Span {
+                        status: Some(trace::status::QUEUED.into()),
+                        queued_at: Some(now_ms()),
+                        ..self.step_span(run_id, op)
+                    });
                     let mut job = format!("{run_id}-{}-plan", op.id);
                     if item.str_payload("incoming") == Some(op.id.as_str()) {
                         job = format!("{job}-{}", ulid::Ulid::generate());
@@ -498,6 +553,7 @@ impl Engine {
             at: wake.max(now),
             ..sleep
         };
+        self.trace_waiting(state.meta.run_id, op, json!({ "sleepUntil": trace::ts(wake.max(now)) }));
         self.enqueue(sleep).await?;
         Ok(None)
     }
@@ -543,6 +599,12 @@ impl Engine {
         }
         let run_id = state.meta.run_id;
         let timeout_job = format!("{run_id}-{}-pause", op.id);
+        let info = json!({
+            "eventName": event,
+            "expression": expression,
+            "timeout": trace::ts(expires_at),
+        });
+        self.trace_waiting(run_id, op, info.clone());
         let pause = Pause {
             id: sha1_uuid(&format!("{run_id}{}", op.id)),
             kind: PauseKind::WaitForEvent,
@@ -557,6 +619,7 @@ impl Engine {
             created_at: now,
             timeout_job: Some(timeout_job.clone()),
             correlation_id: None,
+            span_info: Some(info),
         };
         self.save_pause_with_timeout(&state.meta, &pause, timeout_job).await?;
         Ok(None)
@@ -621,6 +684,13 @@ impl Engine {
         let run_id = state.meta.run_id;
         let correlation_id = format!("{run_id}.{}", op.id);
         let timeout_job = format!("{run_id}-{}-pause", op.id);
+        let invoke_event_id = ulid::Ulid::generate();
+        let info = json!({
+            "functionID": target,
+            "timeout": trace::ts(expires_at),
+            "triggeringEventID": invoke_event_id.to_string(),
+        });
+        self.trace_waiting(run_id, op, info.clone());
         let pause = Pause {
             id: sha1_uuid(&format!("{run_id}{}", op.id)),
             kind: PauseKind::Invoke,
@@ -635,6 +705,7 @@ impl Engine {
             created_at: now,
             timeout_job: Some(timeout_job.clone()),
             correlation_id: Some(correlation_id.clone()),
+            span_info: Some(info),
         };
         self.save_pause_with_timeout(&state.meta, &pause, timeout_job).await?;
 
@@ -657,18 +728,25 @@ impl Engine {
                 "name": op.display_name.clone().or(op.name.clone()).unwrap_or_default(),
             }),
         );
-        self.publish_internal(vec![Event {
-            id: payload
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string(),
-            name: EVENT_FN_INVOKED.into(),
-            data,
-            user: payload.get("user").cloned(),
-            ts: payload.get("ts").and_then(|v| v.as_i64()).unwrap_or(0),
-            v: payload.get("v").and_then(|v| v.as_str()).map(String::from),
-            meta: None,
+        let event_id = payload
+            .get("id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .unwrap_or_else(|| invoke_event_id.to_string());
+        let ts = payload.get("ts").and_then(|v| v.as_i64()).filter(|t| *t > 0).unwrap_or(now);
+        self.publish_tracked(vec![TrackedEvent {
+            internal_id: invoke_event_id,
+            received_at: now,
+            event: Event {
+                id: event_id,
+                name: EVENT_FN_INVOKED.into(),
+                data,
+                user: payload.get("user").cloned(),
+                ts,
+                v: payload.get("v").and_then(|v| v.as_str()).map(String::from),
+                meta: None,
+            },
         }])
         .await?;
         Ok(None)
@@ -727,6 +805,8 @@ impl Engine {
             }
         }
         let timeout_job = format!("{run_id}-{}-pause", op.id);
+        let info = json!({ "signal": signal, "timeout": trace::ts(expires_at) });
+        self.trace_waiting(run_id, op, info.clone());
         let pause = Pause {
             id: sha1_uuid(&format!("{run_id}{}", op.id)),
             kind: PauseKind::Signal,
@@ -741,6 +821,7 @@ impl Engine {
             created_at: now,
             timeout_job: Some(timeout_job.clone()),
             correlation_id: None,
+            span_info: Some(info),
         };
         self.save_pause_with_timeout(&state.meta, &pause, timeout_job).await?;
         Ok(None)
@@ -752,6 +833,7 @@ impl Engine {
         item: &QueueItem,
         op: &Op,
     ) -> anyhow::Result<Option<Outcome>> {
+        let t0 = now_ms();
         let opts = op.opts.clone().unwrap_or(Value::Null);
         let url = opts.get("url").and_then(|v| v.as_str()).unwrap_or_default();
         let method = opts
@@ -793,17 +875,21 @@ impl Engine {
                 let value = json!({ "data": {
                     "url": url, "headers": headers, "body": body, "status_code": status,
                 }});
+                self.trace_step_done(state.meta.run_id, item, op, trace::status::COMPLETED, t0, now_ms(), &value);
                 self.step_completed(state, &op.id, &value, "", false).await?;
                 Ok(None)
             }
             Err(err) => {
                 if item.attempt + 1 < item.max_attempts {
+                    let v = json!({ "error": { "name": "GatewayError", "message": err.to_string() } });
+                    self.trace_step_done(state.meta.run_id, item, op, trace::status::QUEUED, t0, now_ms(), &v);
                     return Ok(Some(Outcome::Retry {
                         at: now_ms() + backoff_ms(item.attempt, self.cfg.retry_interval_s),
                         attempt: item.attempt + 1,
                     }));
                 }
                 let value = json!({ "error": { "name": "GatewayError", "message": err.to_string() } });
+                self.trace_step_done(state.meta.run_id, item, op, trace::status::FAILED, t0, now_ms(), &value);
                 self.step_completed(state, &op.id, &value, "-failure", false).await?;
                 Ok(None)
             }
@@ -816,6 +902,7 @@ impl Engine {
         item: &QueueItem,
         op: &Op,
     ) -> anyhow::Result<Option<Outcome>> {
+        let t0 = now_ms();
         let opts = op.opts.clone().unwrap_or(Value::Null);
         let mut url = opts.get("url").and_then(|v| v.as_str()).unwrap_or_default().to_string();
         let key = opts.get("auth_key").and_then(|v| v.as_str()).unwrap_or_default();
@@ -859,18 +946,21 @@ impl Engine {
         };
         match result {
             Ok(v) => {
-                self.step_completed(state, &op.id, &json!({ "data": v }), "", false)
-                    .await?;
+                let value = json!({ "data": v });
+                self.trace_step_done(state.meta.run_id, item, op, trace::status::COMPLETED, t0, now_ms(), &value);
+                self.step_completed(state, &op.id, &value, "", false).await?;
                 Ok(None)
             }
             Err(msg) => {
+                let value = json!({ "error": { "name": "AIGatewayError", "message": msg } });
                 if item.attempt + 1 < item.max_attempts {
+                    self.trace_step_done(state.meta.run_id, item, op, trace::status::QUEUED, t0, now_ms(), &value);
                     return Ok(Some(Outcome::Retry {
                         at: now_ms() + backoff_ms(item.attempt, self.cfg.retry_interval_s),
                         attempt: item.attempt + 1,
                     }));
                 }
-                let value = json!({ "error": { "name": "AIGatewayError", "message": msg } });
+                self.trace_step_done(state.meta.run_id, item, op, trace::status::FAILED, t0, now_ms(), &value);
                 self.step_completed(state, &op.id, &value, "-failure", false).await?;
                 Ok(None)
             }

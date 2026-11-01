@@ -53,7 +53,7 @@ impl Engine {
                 .and_then(|c| c.as_str())
                 .filter(|c| !c.is_empty())
             {
-                self.resume_invoke(cid, &evt.event.data).await?;
+                self.resume_invoke(cid, &evt.event.data, evt.internal_id).await?;
             }
 
         self.match_pauses(evt, &evt_json).await

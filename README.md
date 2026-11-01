@@ -35,6 +35,26 @@ curl -X POST http://localhost:8288/e/my-event-key -d '{"name":"app/user.created"
 # {"ids":["01J..."],"status":200}
 ```
 
+## Dashboard
+
+oxidle serves Inngest's own dashboard UI (runs, run timelines with steps/attempts/outputs,
+events, apps, functions, rerun / rerun-from-step, cancel, invoke) backed by a compatible
+GraphQL API at `/v0/gql`.
+
+The UI is Inngest's code (SSPL-licensed), so it is not vendored here. Build it once from
+Inngest's repository at a pinned commit (uses bun inside Docker):
+
+```sh
+./ui/build.sh                 # writes ui/dist
+./target/release/oxidle start ...   # serves ui/dist automatically (or pass --ui-dir)
+```
+
+Then open `http://localhost:8288`. `--no-ui` disables both the UI and `/v0/gql`.
+As in the reference server, `/v0/gql` is unauthenticated — keep the port on a trusted network.
+
+Not backed by data yet: Insights (SQL), Sessions, Connect worker lists. The UI's "Send event"
+button posts with a placeholder event key, so it only works in `oxidle dev` mode.
+
 ## Storage backends
 
 | Flags | Durable data (apps, functions, events, history) | Execution state (queue, runs, pauses, flow control) |
@@ -55,7 +75,8 @@ All `inngest start` flags are accepted with the same `INNGEST_*` environment var
 `--retry-interval`, `--queue-workers`, `--tick`, `--no-ui`, `--json`, `--log-level`.
 
 oxidle-specific: `--retention-days` / `OXIDLE_RETENTION_DAYS` (default 7) prunes finished run
-state, events and history; `OXIDLE_REDIS_PREFIX` (default `oxidle`) namespaces Redis keys.
+state, events and history; `--ui-dir` / `OXIDLE_UI_DIR` points at the built dashboard;
+`OXIDLE_REDIS_PREFIX` (default `oxidle`) namespaces Redis keys.
 
 ## Compatibility
 
@@ -84,9 +105,8 @@ Implemented to the wire spec of the Go server and JS SDK (see `docs/spec/`):
   (GET/DELETE), `/v1/runs/{id}/jobs`, `/v1/apps/{app}/functions`, `/v1/signals`,
   `/v1/cancellations` (bulk cancel).
 
-Not yet implemented: the dashboard UI and its GraphQL API (`/v0/gql`), Connect (WebSocket
-workers, port 8289), realtime (`/v1/realtime/*`), durable endpoints (`POST /v1/checkpoint`),
-and the `/v2` API.
+Not yet implemented: Connect (WebSocket workers, port 8289), realtime (`/v1/realtime/*`),
+durable endpoints (`POST /v1/checkpoint`), and the `/v2` API.
 
 ## Testing
 
@@ -99,6 +119,7 @@ BACKEND=postgres ./e2e/run.sh    # ... Postgres
 BACKEND=redis ./e2e/run.sh       # ... Redis
 TARGET=inngest ./e2e/run.sh      # same suite against the official inngest/inngest image
 BENCH=1 N=2000 ./e2e/run.sh      # throughput benchmark (combine with BACKEND/TARGET)
+KEEP=1 ./e2e/run.sh              # leave server + app running to explore the dashboard
 ```
 
 The e2e suite (32 scenarios covering every feature above) passes against the official
@@ -108,12 +129,13 @@ Inngest server, which validates the expectations, and against oxidle on all thre
 
 ```
 src/
-  api/        HTTP routes (axum): events, registration, v0, v1
+  api/        HTTP routes (axum): events, registration, v0, v1, gql (dashboard)
   engine/     event router, scheduler (flow control), queue workers, executor,
-              SDK driver, pauses, finalize, cron, app sync
+              SDK driver, pauses, finalize, cron, app sync, trace (run timelines)
   store/      MetaStore + StateStore traits; sql.rs (SQLite/Postgres), redis.rs
   function.rs SDK function config parsing/validation
 crates/expr/  Inngest-dialect CEL engine
 e2e/          JS SDK test app, test runner, benchmark
+ui/build.sh   builds Inngest's dashboard UI into ui/dist
 docs/spec/    wire/behavior spec extracted from the reference implementation
 ```

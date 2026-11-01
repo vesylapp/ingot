@@ -25,6 +25,20 @@ pub struct Op {
     pub data: Option<Value>,
     #[serde(default)]
     pub error: Option<Value>,
+    /// SDK-measured execution interval: `a` = start (unix ns), `b` = duration (ns).
+    #[serde(default)]
+    pub timing: Option<Value>,
+}
+
+impl Op {
+    /// SDK-measured (start, end) in unix ms, if reported.
+    pub fn timing_ms(&self) -> Option<(i64, i64)> {
+        let t = self.timing.as_ref()?;
+        let a = t.get("a")?.as_f64()?;
+        let b = t.get("b").and_then(|b| b.as_f64()).unwrap_or(0.0);
+        let start = (a / 1e6) as i64;
+        (start > 0).then(|| (start, start + (b / 1e6) as i64))
+    }
 }
 
 impl Op {

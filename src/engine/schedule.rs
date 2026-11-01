@@ -23,6 +23,8 @@ pub struct ScheduleRequest {
     pub prevent_rate_limit: bool,
     pub prevent_debounce: bool,
     pub original_run_id: Option<Ulid>,
+    /// Memoized step results to seed the run with (rerun from step).
+    pub initial_steps: Vec<(String, Value)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -234,7 +236,11 @@ impl Engine {
             suppress_lifecycle: trigger_name == EVENT_FN_FAILED || trigger_name == EVENT_FN_FINISHED,
         };
         match self.state.create_run(&meta, events, IDEMPOTENCY_TTL_MS).await? {
-            CreateRun::Created => {}
+            CreateRun::Created => {
+                for (step_id, value) in &req.initial_steps {
+                    self.state.save_step(run_id, step_id, value).await?;
+                }
+            }
             CreateRun::Duplicate(existing) => {
                 if let Some(k) = &singleton_key {
                     self.state.kv_del(k, Some(&run_id.to_string())).await?;
@@ -258,6 +264,8 @@ impl Engine {
                 started_at: now,
                 ended_at: None,
                 output: None,
+                event_name: Some(trigger_name.to_string()).filter(|n| !n.is_empty()),
+                exec_started_at: None,
             })
             .await?;
 
@@ -291,6 +299,7 @@ impl Engine {
                         created_at: now,
                         timeout_job: None,
                         correlation_id: None,
+                        span_info: None,
                     })
                     .await?;
             }
