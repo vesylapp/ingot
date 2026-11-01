@@ -1126,6 +1126,28 @@ impl StateStore for RedisStore {
         r.get(1).map(|s| parse_score(s)).transpose()
     }
 
+    async fn queue_stats(&self, now: i64) -> Result<QueueStats> {
+        let (total, ready, first): (i64, i64, Vec<String>) = ::redis::pipe()
+            .cmd("ZCARD")
+            .arg(self.qz())
+            .cmd("ZCOUNT")
+            .arg(self.qz())
+            .arg("-inf")
+            .arg(now)
+            .cmd("ZRANGE")
+            .arg(self.qz())
+            .arg(0)
+            .arg(0)
+            .arg("WITHSCORES")
+            .query_async(&mut self.conn())
+            .await?;
+        Ok(QueueStats {
+            total,
+            ready,
+            oldest_at: first.get(1).map(|s| parse_score(s)).transpose()?,
+        })
+    }
+
     async fn wake_blocked(&self, keys: &[String], n: i64) -> Result<()> {
         if keys.is_empty() || n <= 0 {
             return Ok(());

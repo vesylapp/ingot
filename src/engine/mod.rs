@@ -122,7 +122,17 @@ impl Engine {
         if ok && due_soon {
             self.queue_notify.notify_one();
         }
+        if ok && item.kind.calls_sdk() && item.kind != QueueKind::Start {
+            crate::metrics::get().sdk_request_scheduled(&self.fn_label(item.fn_id));
+        }
         Ok(ok)
+    }
+
+    /// A function's slug for metric labels.
+    pub fn fn_label(&self, fn_id: Option<uuid::Uuid>) -> String {
+        fn_id
+            .and_then(|id| self.registry.get(id))
+            .map_or_else(|| "unknown".to_string(), |f| f.slug.clone())
     }
 
     /// Hand events to the router (they must already be persisted).
@@ -138,6 +148,7 @@ impl Engine {
     /// Persist and route already-identified events.
     pub async fn publish_tracked(&self, events: Vec<TrackedEvent>) -> anyhow::Result<()> {
         self.meta.insert_events(&events).await?;
+        crate::metrics::get().events_received("internal", events.len());
         self.route_events(events).await;
         Ok(())
     }
@@ -163,6 +174,7 @@ impl Engine {
             })
             .collect();
         self.meta.insert_events(&tracked).await?;
+        crate::metrics::get().events_received("internal", tracked.len());
         self.route_events(tracked.clone()).await;
         Ok(tracked)
     }

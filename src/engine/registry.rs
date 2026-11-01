@@ -72,6 +72,14 @@ impl Registry {
         self.index.read().by_slug.get(slug).cloned()
     }
 
+    pub fn len(&self) -> usize {
+        self.index.read().by_id.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn all(&self) -> Vec<Arc<Function>> {
         self.index.read().by_id.values().cloned().collect()
     }

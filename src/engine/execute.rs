@@ -3,6 +3,7 @@
 use super::driver::{DriverRequest, Op, Response};
 use super::{Engine, LEASE_MS};
 use super::trace;
+use crate::metrics::{self, SdkStatus};
 use crate::store::{MetaUpdate, SaveStep, Span};
 use crate::types::*;
 use crate::util::{backoff_ms, parse_date_ms, parse_duration_ms, parse_timeout_at, sha1_uuid};
@@ -151,6 +152,7 @@ impl Engine {
         if state.meta.started_at.is_none() {
             let now = now_ms();
             self.trace.run_started(run_id, now);
+            metrics::get().run_started(&f.slug);
             self.state
                 .update_meta(
                     run_id,
@@ -178,6 +180,7 @@ impl Engine {
             _ => item.str_payload("incoming").unwrap_or("step").to_string(),
         };
         let t0 = now_ms();
+        metrics::get().sdk_request_started(&f.slug);
         let result = self
             .call_sdk(DriverRequest {
                 function: f,
@@ -189,6 +192,12 @@ impl Engine {
             })
             .await;
         let t1 = now_ms();
+        let sdk_status = match &result.response {
+            Response::Error { retryable: false, .. } => SdkStatus::Failed,
+            Response::Error { .. } => SdkStatus::Errored,
+            Response::Complete(_) | Response::Ops { .. } => SdkStatus::Success,
+        };
+        metrics::get().sdk_request_ended(&f.slug, sdk_status, t1 - t0);
 
         if let Some(v) = result.request_version
             && state.meta.request_version != v

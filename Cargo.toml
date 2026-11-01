@@ -21,6 +21,7 @@ hmac = "0.13.0"
 humantime = "2.4.0"
 oxidle-expr = { version = "0.1.0", path = "crates/expr" }
 parking_lot = "0.12.5"
+prometheus = { version = "0.14.0", default-features = false, features = ["process"] }
 rand = "0.10.3"
 redis = { version = "1.8.1", features = ["tokio-comp", "connection-manager", "script"] }
 regex = "1.13.1"

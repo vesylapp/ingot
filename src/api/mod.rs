@@ -8,7 +8,7 @@ mod v1;
 
 use crate::engine::Engine;
 use axum::Router;
-use axum::extract::{DefaultBodyLimit, Request, State};
+use axum::extract::{DefaultBodyLimit, MatchedPath, Request, State};
 use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -40,6 +40,7 @@ pub fn router(engine: Arc<Engine>) -> Router {
     }
     let router = router
         .route("/health", get(health))
+        .route("/metrics", get(metrics))
         .route("/e/{key}", post(events::ingest))
         .route("/e/", post(events::missing_key))
         .route("/e", post(events::missing_key))
@@ -74,6 +75,7 @@ pub fn router(engine: Arc<Engine>) -> Router {
                 .expose_headers([header::LINK])
                 .max_age(std::time::Duration::from_secs(3600)),
         )
+        .layer(middleware::from_fn(track_http))
         .layer(middleware::from_fn(move |req: Request, next: Next| {
             let kind = kind.clone();
             async move {
@@ -193,4 +195,38 @@ pub fn public_error(status: StatusCode, msg: &str) -> Response {
 pub fn internal(err: anyhow::Error) -> Response {
     tracing::error!(error = %err, "internal error");
     public_error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+}
+
+/// Prometheus metrics. Unauthenticated, as in the reference server.
+async fn metrics(State(engine): State<AppState>) -> Response {
+    match crate::metrics::get().render(&engine).await {
+        Ok(body) => (
+            [(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],
+            body,
+        )
+            .into_response(),
+        Err(err) => {
+            tracing::error!(error = %err, "failed to render metrics");
+            (StatusCode::INTERNAL_SERVER_ERROR, "failed to gather metrics").into_response()
+        }
+    }
+}
+
+/// Record `oxidle_http_request_duration_seconds`, labelled by route pattern (not raw path)
+/// so cardinality stays bounded.
+async fn track_http(req: Request, next: Next) -> Response {
+    let method = req.method().clone();
+    let route = req
+        .extensions()
+        .get::<MatchedPath>()
+        .map_or_else(|| "unmatched".to_string(), |p| p.as_str().to_string());
+    let start = std::time::Instant::now();
+    let resp = next.run(req).await;
+    crate::metrics::get().http_request(
+        method.as_str(),
+        &route,
+        resp.status().as_u16(),
+        start.elapsed().as_secs_f64(),
+    );
+    resp
 }

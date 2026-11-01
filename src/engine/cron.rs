@@ -113,6 +113,7 @@ impl Engine {
             received_at: now,
         };
         self.meta.insert_events(std::slice::from_ref(&tracked)).await?;
+        crate::metrics::get().events_received("cron", 1);
         let evt_json: Value = tracked.event.to_json();
         self.schedule(
             &f,

@@ -190,6 +190,7 @@ pub async fn ingest(
             &json!({ "ids": vec![""; ids.len()], "status": 500, "error": err.to_string() }),
         );
     }
+    crate::metrics::get().events_received("api", tracked.len());
     engine.route_events(tracked).await;
 
     match failure {

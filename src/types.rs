@@ -367,6 +367,14 @@ pub enum QueueKind {
 }
 
 impl QueueKind {
+    /// Items whose processing makes a request to the SDK app.
+    pub fn calls_sdk(&self) -> bool {
+        matches!(
+            self,
+            QueueKind::Start | QueueKind::Edge | QueueKind::Sleep | QueueKind::EdgeError
+        )
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             QueueKind::Start => "start",

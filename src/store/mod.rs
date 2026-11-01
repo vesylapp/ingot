@@ -155,6 +155,17 @@ pub struct BatchAppend {
     pub duplicate: bool,
 }
 
+/// Queue size, for metrics. Leased items count as not ready: their `at` is the lease expiry.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct QueueStats {
+    /// All items, including leased, blocked and future ones.
+    pub total: i64,
+    /// Items due now (`at <= now`) and waiting for a worker.
+    pub ready: i64,
+    /// Earliest `at` of any item.
+    pub oldest_at: Option<i64>,
+}
+
 /// Outcome of a GCRA check: Ok, or the earliest time (ms) the request would be admitted.
 pub type Gcra = std::result::Result<(), i64>;
 
@@ -202,6 +213,8 @@ pub trait StateStore: Send + Sync {
     async fn next_due(&self) -> Result<Option<i64>>;
     /// Make up to `n` items blocked on any of `keys` due now.
     async fn wake_blocked(&self, keys: &[String], n: i64) -> Result<()>;
+    /// Queue size at `now` (ms), for metrics.
+    async fn queue_stats(&self, now: i64) -> Result<QueueStats>;
 
     // ---- concurrency ----
     /// Try to take a slot on every key. Returns the first saturated key on failure.

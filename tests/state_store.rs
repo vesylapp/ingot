@@ -5,7 +5,7 @@
 
 use oxidle::store::redis::RedisStore;
 use oxidle::store::sql::{PoolConfig, SqlStore};
-use oxidle::store::{CreateRun, MetaUpdate, SaveStep, StateStore};
+use oxidle::store::{CreateRun, MetaUpdate, QueueStats, SaveStep, StateStore};
 use oxidle::types::*;
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -125,6 +125,7 @@ conformance!(queue_lease_expiry, queue_lease_expiry_impl);
 conformance!(queue_requeue_and_wake, queue_requeue_and_wake_impl);
 conformance!(queue_reschedule, queue_reschedule_impl);
 conformance!(queue_remove_and_run_items, queue_remove_and_run_items_impl);
+conformance!(queue_stats, queue_stats_impl);
 conformance!(concurrency_limits, concurrency_limits_impl);
 conformance!(
     concurrency_expiry_and_extend,
@@ -732,6 +733,29 @@ async fn queue_requeue_and_wake_impl(s: &dyn StateStore) {
             .at,
         now + 120_000
     );
+}
+
+async fn queue_stats_impl(s: &dyn StateStore) {
+    let now = now_ms();
+    assert_eq!(s.queue_stats(now).await.unwrap(), QueueStats::default());
+
+    s.enqueue(&item("s1", now - 5_000, None)).await.unwrap();
+    s.enqueue(&item("s2", now - 1_000, None)).await.unwrap();
+    s.enqueue(&item("s3", now + 60_000, None)).await.unwrap();
+    assert_eq!(
+        s.queue_stats(now).await.unwrap(),
+        QueueStats { total: 3, ready: 2, oldest_at: Some(now - 5_000) }
+    );
+
+    // A leased item is no longer ready: its `at` becomes the lease expiry.
+    let leased = s.lease(now, 1, 30_000).await.unwrap();
+    assert_eq!(ids(&leased), ["s1"]);
+    assert_eq!(
+        s.queue_stats(now).await.unwrap(),
+        QueueStats { total: 3, ready: 1, oldest_at: Some(now - 1_000) }
+    );
+    s.ack(&leased[0]).await.unwrap();
+    assert_eq!(s.queue_stats(now).await.unwrap().total, 2);
 }
 
 async fn queue_reschedule_impl(s: &dyn StateStore) {

@@ -53,6 +53,8 @@ pub fn spawn_workers(engine: Arc<Engine>) {
 
 impl Engine {
     async fn process(self: &Arc<Self>, mut item: QueueItem) {
+        let metrics = crate::metrics::get();
+        let _in_progress = metrics.queue_item_started(item.kind.as_str());
         let lease_id = item.lease_id.clone().unwrap_or_default();
         let id = item.id.clone();
         let extender = {
@@ -87,6 +89,7 @@ impl Engine {
         };
         extender.abort();
 
+        let errored = result.is_err();
         let outcome = match result {
             Ok(o) => o,
             Err(err) => {
@@ -101,6 +104,16 @@ impl Engine {
                 }
             }
         };
+        let label = match (&outcome, errored) {
+            (_, true) => "error",
+            (Outcome::Done, _) => "done",
+            (Outcome::Retry { .. }, _) => "retry",
+            (Outcome::Delay { .. }, _) => "delay",
+        };
+        metrics.queue_item_processed(item.kind.as_str(), label);
+        if matches!(outcome, Outcome::Retry { .. }) && item.kind.calls_sdk() {
+            metrics.sdk_request_scheduled(&self.fn_label(item.fn_id));
+        }
         let res = match outcome {
             Outcome::Done => self.state.ack(&item).await,
             Outcome::Retry { at, attempt } => self.state.requeue(&item, at, attempt, None).await,

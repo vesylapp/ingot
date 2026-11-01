@@ -360,6 +360,47 @@ const tests = {
     ok(body.ids[0] !== "" && body.ids[1] === "", "partial ids");
   },
 
+  async metrics() {
+    // Unauthenticated, Prometheus text format, as in the reference server.
+    const scrape = async () => {
+      const res = await fetch(`${API}/metrics`);
+      eq(res.status, 200, "metrics status");
+      ok((res.headers.get("content-type") || "").startsWith("text/plain"), "content type");
+      return res.text();
+    };
+    const value = (text, series) => {
+      const line = text.split("\n").find((l) => l.startsWith(series + " "));
+      return line ? Number(line.slice(series.length + 1)) : null;
+    };
+    const first = await scrape();
+    ok(first.includes("# TYPE inngest_queue_depth gauge"), "queue depth gauge");
+    ok(value(first, "inngest_queue_depth") !== null, "queue depth value");
+
+    // Lifecycle counters (run.sh enables INNGEST_EXPERIMENTAL_PROM_METRICS on both servers).
+    const fn = 'fn="e2e-hello"';
+    const before = value(first, `inngest_function_run_ended_total{${fn},status="completed"}`) || 0;
+    const [id] = await send({ name: "e2e/hello", data: { name: "metrics" } });
+    await waitRun(id);
+    let text;
+    await waitFor(async () => {
+      text = await scrape();
+      return value(text, `inngest_function_run_ended_total{${fn},status="completed"}`) > before;
+    });
+    for (const series of [
+      `inngest_function_run_scheduled_total{${fn}}`,
+      `inngest_function_run_started_total{${fn}}`,
+      `inngest_sdk_req_started_total{${fn}}`,
+      `inngest_sdk_req_ended_total{${fn},status="success"}`,
+    ]) {
+      ok(value(text, series) >= 1, `missing ${series}`);
+    }
+    if (STRICT_REST) {
+      ok(/^oxidle_build_info\{version="[^"]+"\} 1$/m.test(text), "build info");
+      ok(value(text, 'oxidle_events_received_total{source="api"}') >= 1, "events received");
+      ok(text.includes('oxidle_http_request_duration_seconds_count{method="POST",route="/e/{key}",status="200"}'), "http route label");
+    }
+  },
+
   async restApi() {
     const fns = await api(`/v1/apps/e2e/functions`);
     eq(fns.status, 200);

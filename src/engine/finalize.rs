@@ -21,6 +21,7 @@ impl Engine {
         if !self.state.end_run(meta.run_id, status, now).await? {
             return Ok(());
         }
+        crate::metrics::get().run_ended(&meta.fn_slug, status, now - meta.created_at);
         self.state.remove_run_items(meta.run_id, current_item).await?;
         self.state.delete_run_pauses(meta.run_id).await?;
         if let Some(k) = &meta.singleton_key {

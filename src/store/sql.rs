@@ -1360,6 +1360,23 @@ impl StateStore for SqlStore {
         Ok(row.try_get::<Option<i64>, _>("at")?)
     }
 
+    async fn queue_stats(&self, now: i64) -> Result<QueueStats> {
+        let row = sqlx::query(
+            "SELECT COUNT(*) AS total,
+                    CAST(COALESCE(SUM(CASE WHEN at <= $1 THEN 1 ELSE 0 END), 0) AS BIGINT) AS ready,
+                    MIN(at) AS oldest_at
+             FROM queue_items",
+        )
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(QueueStats {
+            total: row.try_get("total")?,
+            ready: row.try_get("ready")?,
+            oldest_at: row.try_get("oldest_at")?,
+        })
+    }
+
     async fn wake_blocked(&self, keys: &[String], n: i64) -> Result<()> {
         let now = now_ms();
         for key in keys {

@@ -6,6 +6,7 @@ pub mod config;
 pub mod cron;
 pub mod engine;
 pub mod function;
+pub mod metrics;
 pub mod store;
 pub mod types;
 pub mod util;

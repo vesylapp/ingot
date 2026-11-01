@@ -41,7 +41,8 @@ if [[ "$TARGET" == "inngest" ]]; then
   # Reference server in Docker; it reaches the app via the host.
   APP_ORIGIN="http://host.docker.internal:$APP_PORT"
   docker rm -f oxidle-e2e-ref >/dev/null 2>&1 || true
-  docker run -d --name oxidle-e2e-ref -p "$PORT:8288" inngest/inngest:${INNGEST_VERSION:-latest} \
+  docker run -d --name oxidle-e2e-ref -p "$PORT:8288" -e INNGEST_EXPERIMENTAL_PROM_METRICS=1 \
+    inngest/inngest:${INNGEST_VERSION:-latest} \
     inngest start --event-key "$EVENT_KEY" --signing-key "$SERVER_KEY" --retry-interval 1 >/dev/null
   until curl -sf "http://127.0.0.1:$PORT/health" >/dev/null; do sleep 0.3; done
   echo "reference inngest up"
@@ -68,7 +69,7 @@ case "$BACKEND" in
     ;;
 esac
 
-RUST_LOG=${RUST_LOG:-oxidle=debug} "$BIN" start \
+RUST_LOG=${RUST_LOG:-oxidle=debug} INNGEST_EXPERIMENTAL_PROM_METRICS=1 "$BIN" start \
   --port "$PORT" --signing-key "$SERVER_KEY" --event-key "$EVENT_KEY" \
   --sqlite-dir "$WORK/db" --retry-interval 1 ${EXTRA[@]+"${EXTRA[@]}"} >"$LOG" 2>&1 &
 SERVER_PID=$!

@@ -237,6 +237,7 @@ impl Engine {
         };
         match self.state.create_run(&meta, events, IDEMPOTENCY_TTL_MS).await? {
             CreateRun::Created => {
+                crate::metrics::get().run_scheduled(&f.slug);
                 for (step_id, value) in &req.initial_steps {
                     self.state.save_step(run_id, step_id, value).await?;
                 }
