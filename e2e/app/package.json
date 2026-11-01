@@ -1,0 +1,9 @@
+{
+  "name": "oxidle-e2e",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "express": "^4.21.2",
+    "inngest": "^4.26.0"
+  }
+}

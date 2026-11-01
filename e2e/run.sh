@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Run the end-to-end suite: oxidle server on the host + the JS SDK test app in Docker.
+#   ./e2e/run.sh                 # sqlite backend
+#   BACKEND=postgres ./e2e/run.sh
+#   BACKEND=redis ./e2e/run.sh
+#   ONLY=hello,steps ./e2e/run.sh
+#   TARGET=inngest ./e2e/run.sh  # run the same suite against the reference Go server
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+PORT=${PORT:-8288}
+APP_PORT=${APP_PORT:-3939}
+# The server gets the bare hex key; the SDK gets the prefixed form (exercises prefix handling).
+SERVER_KEY=${SERVER_KEY:-8b1d8a3c4f0e2d9b7a6c5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b}
+SIGNING_KEY=${SIGNING_KEY:-signkey-test-$SERVER_KEY}
+TARGET=${TARGET:-oxidle}
+EVENT_KEY=${EVENT_KEY:-e2e-event-key}
+BACKEND=${BACKEND:-sqlite}
+WORK=$(mktemp -d)
+LOG=${LOG:-$WORK/oxidle.log}
+
+cleanup() {
+  [[ -n "${SERVER_PID:-}" ]] && kill "$SERVER_PID" 2>/dev/null || true
+  docker rm -f oxidle-e2e-app >/dev/null 2>&1 || true
+  docker rm -f oxidle-e2e-ref >/dev/null 2>&1 || true
+  if [[ "$BACKEND" != "sqlite" ]]; then docker rm -f oxidle-e2e-db >/dev/null 2>&1 || true; fi
+}
+trap cleanup EXIT
+
+APP_ORIGIN="http://localhost:$APP_PORT"
+if [[ "$TARGET" == "inngest" ]]; then
+  # Reference server in Docker; it reaches the app via the host.
+  APP_ORIGIN="http://host.docker.internal:$APP_PORT"
+  docker rm -f oxidle-e2e-ref >/dev/null 2>&1 || true
+  docker run -d --name oxidle-e2e-ref -p "$PORT:8288" inngest/inngest:${INNGEST_VERSION:-latest} \
+    inngest start --event-key "$EVENT_KEY" --signing-key "$SERVER_KEY" --retry-interval 1 >/dev/null
+  until curl -sf "http://127.0.0.1:$PORT/health" >/dev/null; do sleep 0.3; done
+  echo "reference inngest up"
+else
+if [[ -z "${BIN:-}" ]]; then
+  cargo build ${CARGO_FLAGS:-} -q
+  BIN=target/${PROFILE:-debug}/oxidle
+fi
+
+EXTRA=()
+case "$BACKEND" in
+  postgres)
+    docker rm -f oxidle-e2e-db >/dev/null 2>&1 || true
+    docker run -d --name oxidle-e2e-db -e POSTGRES_PASSWORD=pw -p 5499:5432 postgres:16-alpine >/dev/null
+    until docker exec oxidle-e2e-db pg_isready -U postgres >/dev/null 2>&1; do sleep 0.5; done
+    sleep 1
+    EXTRA+=(--postgres-uri "postgres://postgres:pw@127.0.0.1:5499/postgres")
+    ;;
+  redis)
+    docker rm -f oxidle-e2e-db >/dev/null 2>&1 || true
+    docker run -d --name oxidle-e2e-db -p 6398:6379 redis:7-alpine >/dev/null
+    sleep 1
+    EXTRA+=(--redis-uri "redis://127.0.0.1:6398")
+    ;;
+esac
+
+RUST_LOG=${RUST_LOG:-oxidle=debug} "$BIN" start \
+  --port "$PORT" --signing-key "$SERVER_KEY" --event-key "$EVENT_KEY" \
+  --sqlite-dir "$WORK/db" --retry-interval 1 ${EXTRA[@]+"${EXTRA[@]}"} >"$LOG" 2>&1 &
+SERVER_PID=$!
+until curl -sf "http://127.0.0.1:$PORT/health" >/dev/null; do
+  kill -0 "$SERVER_PID" 2>/dev/null || { echo "server died:"; cat "$LOG"; exit 1; }
+  sleep 0.2
+done
+echo "oxidle up (backend=$BACKEND, log=$LOG)"
+fi
+
+docker rm -f oxidle-e2e-app >/dev/null 2>&1 || true
+docker run -d --name oxidle-e2e-app -p "$APP_PORT:3939" \
+  -v "$PWD/e2e/app:/app" -w /app \
+  -e INNGEST_DEV=0 -e INNGEST_BASE_URL="http://host.docker.internal:$PORT" \
+  -e INNGEST_SIGNING_KEY="$SIGNING_KEY" -e INNGEST_EVENT_KEY="$EVENT_KEY" \
+  -e INNGEST_SERVE_ORIGIN="$APP_ORIGIN" \
+  node:22-alpine sh -c "npm install --silent --no-audit --no-fund && node app.mjs" >/dev/null
+until curl -sf "http://127.0.0.1:$APP_PORT/state" >/dev/null; do
+  if ! docker ps -q -f name=oxidle-e2e-app | grep -q .; then docker logs oxidle-e2e-app; exit 1; fi
+  sleep 0.5
+done
+echo "app up"
+
+set +e
+docker exec -e TARGET="$TARGET" -e ONLY="${ONLY:-}" -e CRON="${CRON:-}" -e APP_URL="http://localhost:3939" \
+  -e INNGEST_DEV=0 -e INNGEST_BASE_URL="http://host.docker.internal:$PORT" \
+  -e INNGEST_SIGNING_KEY="$SIGNING_KEY" -e INNGEST_EVENT_KEY="$EVENT_KEY" \
+  oxidle-e2e-app node test.mjs
+STATUS=$?
+if [[ $STATUS -ne 0 ]]; then
+  if [[ "$TARGET" == "inngest" ]]; then docker logs --tail "${LOG_LINES:-60}" oxidle-e2e-ref 2>&1
+  else echo "--- server log tail ---"; tail -n "${LOG_LINES:-60}" "$LOG"; fi
+  echo "--- app log tail ---"; docker logs --tail 40 oxidle-e2e-app 2>&1
+fi
+exit $STATUS

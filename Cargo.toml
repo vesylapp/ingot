@@ -1,0 +1,44 @@
+[package]
+name = "oxidle"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+async-trait = "0.1.92"
+axum = { version = "0.8.9", features = ["macros", "ws"] }
+base64 = "0.23.1"
+bytes = "1.12.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = "0.10.4"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+croner = "4.0.2"
+dashmap = "6"
+futures = "0.3.34"
+hex = "0.4.3"
+hmac = "0.13.0"
+humantime = "2.4.0"
+oxidle-expr = { version = "0.1.0", path = "crates/expr" }
+parking_lot = "0.12.5"
+rand = "0.10.3"
+redis = { version = "1.8.1", features = ["tokio-comp", "connection-manager", "script"] }
+regex = "1.13.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["raw_value"] }
+serde_json_canonicalizer = "0.4.1"
+sha1 = "0.11.0"
+sha2 = "0.11.1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres", "json", "chrono", "any"] }
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["full"] }
+tower-http = { version = "0.7.1", features = ["cors", "trace", "compression-gzip"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+ulid = { version = "3.0.0", features = ["serde"] }
+url = "2.5.8"
+uuid = { version = "1.29.0", features = ["v4", "serde", "v5"] }
+xxhash-rust = { version = "0.8.19", features = ["xxh64"] }
+
+[workspace]
+members = ["crates/*"]
