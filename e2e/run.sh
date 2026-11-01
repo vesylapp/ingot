@@ -28,6 +28,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# A leftover server (e.g. from KEEP=1) would answer our health checks and be tested instead.
+for p in "$PORT" "$APP_PORT"; do
+  if (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; then
+    echo "port $p is already in use; stop whatever is listening (lsof -iTCP:$p -sTCP:LISTEN) or set PORT/APP_PORT" >&2
+    exit 1
+  fi
+done
+
 APP_ORIGIN="http://localhost:$APP_PORT"
 if [[ "$TARGET" == "inngest" ]]; then
   # Reference server in Docker; it reaches the app via the host.
