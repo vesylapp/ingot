@@ -1,0 +1,60 @@
+src/store/redis.rs
+  s_b3b9f663377036::t_fff87df580e11e 1129-1150
+Cargo.toml
+  s_b3b9f663377036::t_3e220bf2ba85c6 24
+src/store/mod.rs
+  s_b3b9f663377036::t_fff87df580e11e 158-168,216-217
+src/engine/registry.rs
+  s_b3b9f663377036::t_48668cf990f3b3 75-82
+src/engine/execute.rs
+  s_b3b9f663377036::t_0b26c8a1ffa884 6
+  s_b3b9f663377036::t_42cbd019c2d324 155,183,195-200
+src/engine/schedule.rs
+  s_b3b9f663377036::t_42cbd019c2d324 240
+tests/state_store.rs
+  s_b3b9f663377036::t_c37293818ba7c9 8,128,738-758
+  s_b3b9f663377036::t_2ec0122ef3f908 759-760
+src/engine/mod.rs
+  s_b3b9f663377036::t_0b26c8a1ffa884 125-127,131-137,151,177
+src/metrics.rs
+  s_b3b9f663377036::t_ed78bb44dad463 1-321
+src/types.rs
+  s_b3b9f663377036::t_0b26c8a1ffa884 370-377
+src/engine/cron.rs
+  s_b3b9f663377036::t_cc330533716319 116
+e2e/app/test.mjs
+  s_b3b9f663377036::t_965387b3be7a0b 363-397,399-403
+  s_b3b9f663377036::t_3825357f19d791 398
+e2e/run.sh
+  s_b3b9f663377036::t_965387b3be7a0b 44-45,72
+src/engine/worker.rs
+  s_b3b9f663377036::t_cc330533716319 56-57,92,107-116
+src/api/mod.rs
+  s_b3b9f663377036::t_4a4532d566ff31 11,43,78,199-232
+src/engine/finalize.rs
+  s_b3b9f663377036::t_42cbd019c2d324 24
+src/store/sql.rs
+  s_b3b9f663377036::t_fff87df580e11e 1363-1379
+src/api/events.rs
+  s_b3b9f663377036::t_cc330533716319 193
+src/lib.rs
+  s_b3b9f663377036::t_3e220bf2ba85c6 9
+Cargo.lock
+  s_b3b9f663377036::t_561b51abb69dfc 208,1683-1688,1916,2082,2122-2159,2493-2505,2515
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9ad7aaf6aedfd7991ff78fb69a7f9e3cac8140c2",
+  "prompts": {},
+  "sessions": {
+    "s_b3b9f663377036": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7fcb96c-2e2e-47c6-a9d7-4a20eefa4820",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}
