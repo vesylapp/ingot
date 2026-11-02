@@ -1,0 +1,98 @@
+src/function.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 84,215,264
+Dockerfile
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 3,20,41-43,46,50-51
+README.md
+  s_cb8c467d6c11cd::t_530a79d058fda7 1,77,108,115,122,163,193,203,226,301
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 13,19,29,39,50,79-80,133,140,167-178,182,204-206,210,216,223,240,287-288,295
+src/api/v1.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 357
+src/healthcheck.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 1
+src/main.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 2,18,27,30,44
+tests/state_store.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 4,6-9,34,44,1351
+src/lib.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 42,56
+  s_cb8c467d6c11cd::t_6e4fe5ca407f4e 1
+e2e/shutdown.sh
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 18,30,34,55-56
+src/engine/mod.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 22,189
+docs/benchmarks/throughput.svg
+  s_cb8c467d6c11cd::t_530a79d058fda7 19,32,37,42,47,65,70,75,80
+  s_cb8c467d6c11cd::t_2b17f23d09428f 20-21
+src/engine/schedule.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 8
+src/engine/pauses.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 7
+crates/expr/Cargo.toml
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 2
+src/logging.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 8,150
+crates/expr/oracle/main.go
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 6
+tests/run_queries.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 4,6-8,14,17,20
+bench/results/matrix.jsonl
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 1-44
+src/store/sql.rs
+  s_cb8c467d6c11cd::t_2b17f23d09428f 204-205
+Cargo.toml
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 2,22
+e2e/run.sh
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 2,17,21,25-27,43-44,52,58-60,65-66,72,80,83-84,91,101,110,117,119
+tests/dashboard.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 3-7,40,53,88,186
+src/metrics.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 5,108,115,124,132,188,195,201,208,215,221,226,230,321,355
+e2e/app/test.mjs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 10,411-413
+tests/migrations.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 3,6,22,37-38,44
+src/engine/events.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 6
+e2e/app/package.json
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 2
+docs/benchmarks/latency.svg
+  s_cb8c467d6c11cd::t_530a79d058fda7 19,34,39,44,49,65,70,75,80
+  s_cb8c467d6c11cd::t_2b17f23d09428f 20-21
+src/api/mod.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 216
+src/config.rs
+  s_cb8c467d6c11cd::t_6e4fe5ca407f4e 80,84
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 6,163,167,172
+bench/matrix.sh
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 2,6,10,16,23,30,114-115
+bench/report.py
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 19,149,166
+  s_cb8c467d6c11cd::t_530a79d058fda7 161,208
+tests/retention.rs
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 4,6-8,18,24,27,188,211-212
+docs/benchmarks.md
+  s_cb8c467d6c11cd::t_530a79d058fda7 3,17,34,36,38,40,49,51,53,55,86,102,135,138,162,165,167,192,195,203,207,223,227,232,234-235,240,246,248
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 177
+crates/expr/oracle/regen.py
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 15
+.github/workflows/docker.yml
+  s_cb8c467d6c11cd::t_87b42f5390c0ea 1,65,71,74
+Cargo.lock
+  s_cb8c467d6c11cd::t_978ee4dd89ee66 1551-1605
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "253b38fb3c6894f6238ba843affbc6729ea30185",
+  "prompts": {},
+  "sessions": {
+    "s_cb8c467d6c11cd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f5639c67-35ee-480d-b313-705b2e5f2184",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}
