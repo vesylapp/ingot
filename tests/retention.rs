@@ -1,11 +1,11 @@
 //! History retention: what `prune` deletes and keeps, batching, deadlines, and the
 //! maintenance lease that keeps replicas from repeating each other's work.
 //!
-//! Runs on SQLite, and on Postgres too when `OXIDLE_TEST_POSTGRES` is set.
+//! Runs on SQLite, and on Postgres too when `INGOT_TEST_POSTGRES` is set.
 
-use oxidle::store::sql::{PoolConfig, SqlStore};
-use oxidle::store::{EventQuery, MetaStore, Pruned, Span, StateStore};
-use oxidle::types::*;
+use ingot::store::sql::{PoolConfig, SqlStore};
+use ingot::store::{EventQuery, MetaStore, Pruned, Span, StateStore};
+use ingot::types::*;
 use serde_json::{Map, json};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -15,16 +15,16 @@ use uuid::Uuid;
 const DAY: i64 = 86_400_000;
 
 async fn stores() -> Vec<(String, Arc<SqlStore>)> {
-    let path = std::env::temp_dir().join(format!("oxidle-ret-{}.db", Ulid::generate()));
+    let path = std::env::temp_dir().join(format!("ingot-ret-{}.db", Ulid::generate()));
     let url = format!("sqlite://{}?mode=rwc", path.display());
     let mut out = vec![(
         "sqlite".to_string(),
         Arc::new(SqlStore::connect(&url, PoolConfig::default()).await.unwrap()),
     )];
-    if let Ok(admin_url) = std::env::var("OXIDLE_TEST_POSTGRES") {
+    if let Ok(admin_url) = std::env::var("INGOT_TEST_POSTGRES") {
         sqlx::any::install_default_drivers();
         let admin = sqlx::AnyPool::connect(&admin_url).await.unwrap();
-        let db = format!("oxidle_ret_{}", Ulid::generate().to_string().to_lowercase());
+        let db = format!("ingot_ret_{}", Ulid::generate().to_string().to_lowercase());
         sqlx::query(&format!("CREATE DATABASE {db}")).execute(&admin).await.unwrap();
         let url = format!("{}/{db}", admin_url.rsplit_once('/').unwrap().0);
         out.push((
@@ -185,7 +185,7 @@ async fn maintenance_runs_on_one_node_at_a_time() {
     let (_, store) = stores().await.remove(0);
     let meta: Arc<dyn MetaStore> = store.clone();
     let state: Arc<dyn StateStore> = store.clone();
-    let cfg = oxidle::config::Config {
+    let cfg = ingot::config::Config {
         host: "127.0.0.1".into(),
         port: 0,
         sdk_urls: vec![],
@@ -208,8 +208,8 @@ async fn maintenance_runs_on_one_node_at_a_time() {
         retention_days: 7,
         shutdown_timeout_s: 5,
     };
-    let (engine, _rx) = oxidle::engine::Engine::new(cfg, meta, state.clone());
-    let key = oxidle::engine::maintenance::LEASE_KEY;
+    let (engine, _rx) = ingot::engine::Engine::new(cfg, meta, state.clone());
+    let key = ingot::engine::maintenance::LEASE_KEY;
 
     // Another node holds the lease: this one skips the pass.
     state.kv_set_nx(key, "other-node", Some(60_000)).await.unwrap();

@@ -5,7 +5,7 @@
 //!
 //! ```json
 //! {"time":"2026-11-01T12:00:00.000000Z","severity":"WARNING","level":"WARN",
-//!  "message":"run finished","target":"oxidle::engine::finalize","run_id":"01J..."}
+//!  "message":"run finished","target":"ingot::engine::finalize","run_id":"01J..."}
 //! ```
 //!
 //! `level` keeps the original level name for filters written against it; event fields are
@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(lines[0]["attempts"], 3);
         assert_eq!(lines[0]["ok"], false);
         assert!(lines[0]["time"].as_str().unwrap().ends_with('Z'));
-        assert!(lines[0]["target"].as_str().unwrap().starts_with("oxidle::logging"));
+        assert!(lines[0]["target"].as_str().unwrap().starts_with("ingot::logging"));
 
         assert_eq!(lines[1]["severity"], "ERROR");
         assert_eq!(lines[1]["error"], "boom");

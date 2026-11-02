@@ -3,7 +3,7 @@
 // the Go type and %v of the value, any evaluation error, and whether the
 // expression passes the default and the restrictive validation policies.
 //
-// regen.sh builds it inside an Inngest checkout; it is not part of oxidle.
+// regen.sh builds it inside an Inngest checkout; it is not part of ingot.
 package main
 
 import (

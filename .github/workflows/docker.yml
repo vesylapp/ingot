@@ -1,4 +1,4 @@
-# Builds the oxidle image for linux/amd64 and linux/arm64 on native runners and publishes a
+# Builds the ingot image for linux/amd64 and linux/arm64 on native runners and publishes a
 # multi-arch image to GitHub Container Registry (ghcr.io/<owner>/<repo>).
 #
 #   push to main  -> :main, :latest, :sha-<short>
@@ -62,16 +62,16 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           load: true
-          tags: oxidle:test
+          tags: ingot:test
           cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
 
       - name: Check the image starts
         run: |
-          docker run -d --name oxidle -p 8288:8288 oxidle:test start \
+          docker run -d --name ingot -p 8288:8288 ingot:test start \
             --event-key test --signing-key 8b1d8a3c4f0e2d9b7a6c5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b
           for _ in $(seq 1 30); do curl -sf localhost:8288/health && exit 0; sleep 1; done
-          docker logs oxidle
+          docker logs ingot
           exit 1
 
       # Push by digest only (layers come from the cache above); the merge job tags the

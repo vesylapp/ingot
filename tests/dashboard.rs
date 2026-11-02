@@ -1,10 +1,10 @@
 //! Dashboard GraphQL API: shapes the Inngest UI depends on.
 
-use oxidle::config::Config;
-use oxidle::engine::Engine;
-use oxidle::store::sql::{PoolConfig, SqlStore};
-use oxidle::store::{MetaStore, Span, StateStore};
-use oxidle::types::*;
+use ingot::config::Config;
+use ingot::engine::Engine;
+use ingot::store::sql::{PoolConfig, SqlStore};
+use ingot::store::{MetaStore, Span, StateStore};
+use ingot::types::*;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use ulid::Ulid;
@@ -37,7 +37,7 @@ fn config() -> Config {
 }
 
 struct Fixture {
-    schema: oxidle::api::gql::DashboardSchema,
+    schema: ingot::api::gql::DashboardSchema,
     run_id: Ulid,
     _dir: tempdir::Dir,
 }
@@ -50,7 +50,7 @@ mod tempdir {
         }
     }
     pub fn new() -> Dir {
-        let p = std::env::temp_dir().join(format!("oxidle-dash-{}", ulid::Ulid::generate()));
+        let p = std::env::temp_dir().join(format!("ingot-dash-{}", ulid::Ulid::generate()));
         std::fs::create_dir_all(&p).unwrap();
         Dir(p)
     }
@@ -85,7 +85,7 @@ async fn fixture() -> Fixture {
         "triggers": [{"event": "app/go"}],
         "steps": {"step": {"id": "step", "name": "step", "runtime": {"type": "http", "url": "http://localhost:3000/api/inngest?fnId=my-app-flaky&stepId=step"}}}
     });
-    let mut f = oxidle::function::parse_function(&raw, app_id, "my-app", None).unwrap();
+    let mut f = ingot::function::parse_function(&raw, app_id, "my-app", None).unwrap();
     f.id = fn_id;
     meta.sync_functions(app_id, &[f]).await.unwrap();
 
@@ -183,7 +183,7 @@ async fn fixture() -> Fixture {
     let (engine, _rx) = Engine::new(config(), meta, state);
     engine.registry.reload().await.unwrap();
     Fixture {
-        schema: oxidle::api::gql::schema(engine),
+        schema: ingot::api::gql::schema(engine),
         run_id,
         _dir: dir,
     }

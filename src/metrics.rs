@@ -2,7 +2,7 @@
 //!
 //! `inngest_*` metrics mirror the reference server: `inngest_queue_depth` is always present,
 //! and the run / SDK request lifecycle counters are only recorded when
-//! `INNGEST_EXPERIMENTAL_PROM_METRICS` is truthy, as in Inngest. `oxidle_*` metrics (and the
+//! `INNGEST_EXPERIMENTAL_PROM_METRICS` is truthy, as in Inngest. `ingot_*` metrics (and the
 //! standard `process_*` metrics on Linux) are always recorded.
 //!
 //! Counters and histograms are per process; the queue gauges read the shared store, so with
@@ -105,14 +105,14 @@ impl Metrics {
         let request_buckets = prometheus::DEFAULT_BUCKETS.to_vec();
 
         let queue_lag = Gauge::new(
-            "oxidle_queue_lag_seconds",
+            "ingot_queue_lag_seconds",
             "Age of the oldest queue item that is due but not yet picked up (0 when none)",
         )
         .expect("valid gauge");
         r.register(Box::new(queue_lag.clone())).expect("unique metric");
         let queue_in_progress = IntGaugeVec::new(
             Opts::new(
-                "oxidle_queue_in_progress",
+                "ingot_queue_in_progress",
                 "Queue items this node is processing right now",
             ),
             &["kind"],
@@ -121,7 +121,7 @@ impl Metrics {
         r.register(Box::new(queue_in_progress.clone())).expect("unique metric");
         let store_up = IntGaugeVec::new(
             Opts::new(
-                "oxidle_store_up",
+                "ingot_store_up",
                 "1 if the store answered a ping during this scrape, else 0 (database, state)",
             ),
             &["store"],
@@ -129,7 +129,7 @@ impl Metrics {
         .expect("valid gauge");
         r.register(Box::new(store_up.clone())).expect("unique metric");
         let build_info = IntGaugeVec::new(
-            Opts::new("oxidle_build_info", "Always 1; labelled with the oxidle version"),
+            Opts::new("ingot_build_info", "Always 1; labelled with the ingot version"),
             &["version"],
         )
         .expect("valid gauge");
@@ -185,49 +185,49 @@ impl Metrics {
             ),
             queue_ready: gauge(
                 &r,
-                "oxidle_queue_ready_items",
+                "ingot_queue_ready_items",
                 "Queue items that are due now and waiting for a worker",
             ),
             queue_lag,
             queue_in_progress,
             queue_processed: counter(
                 &r,
-                "oxidle_queue_items_processed_total",
+                "ingot_queue_items_processed_total",
                 "Queue items processed by this node, by kind and outcome (done, retry, delay, error)",
                 &["kind", "outcome"],
             ),
             sdk_duration: histogram(
                 &r,
-                "oxidle_sdk_request_duration_seconds",
+                "ingot_sdk_request_duration_seconds",
                 "Duration of requests to SDK apps, by function and outcome",
                 &["fn", "status"],
                 request_buckets.clone(),
             ),
             run_duration: histogram(
                 &r,
-                "oxidle_function_run_duration_seconds",
+                "ingot_function_run_duration_seconds",
                 "Time from a run being scheduled to it ending, by function and status",
                 &["fn", "status"],
                 run_buckets,
             ),
             events_received: counter(
                 &r,
-                "oxidle_events_received_total",
+                "ingot_events_received_total",
                 "Events received, by source (api, internal, cron)",
                 &["source"],
             ),
             http_duration: histogram(
                 &r,
-                "oxidle_http_request_duration_seconds",
+                "ingot_http_request_duration_seconds",
                 "HTTP requests served, by method, route and status code",
                 &["method", "route", "status"],
                 request_buckets,
             ),
-            functions: gauge(&r, "oxidle_functions", "Functions currently registered"),
+            functions: gauge(&r, "ingot_functions", "Functions currently registered"),
             store_up,
             retention_deleted: counter(
                 &r,
-                "oxidle_retention_deleted_rows_total",
+                "ingot_retention_deleted_rows_total",
                 "History rows deleted by retention, by table",
                 &["table"],
             ),
@@ -318,7 +318,7 @@ impl Metrics {
     }
 
     /// Refresh the store-backed gauges and encode everything in the Prometheus text format.
-    /// An unreachable store shows up as `oxidle_store_up 0` rather than a failed scrape; the
+    /// An unreachable store shows up as `ingot_store_up 0` rather than a failed scrape; the
     /// queue gauges then keep their last values.
     pub async fn render(&self, engine: &Engine) -> anyhow::Result<String> {
         let timeout = std::time::Duration::from_secs(2);
@@ -352,7 +352,7 @@ impl Metrics {
     }
 }
 
-/// Decrements `oxidle_queue_in_progress` when dropped.
+/// Decrements `ingot_queue_in_progress` when dropped.
 pub struct InProgress(IntGauge);
 
 impl Drop for InProgress {

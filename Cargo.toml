@@ -1,5 +1,5 @@
 [package]
-name = "oxidle"
+name = "ingot"
 version = "0.1.4"
 edition = "2024"
 
@@ -19,7 +19,7 @@ futures = "0.3.34"
 hex = "0.4.3"
 hmac = "0.13.0"
 humantime = "2.4.0"
-oxidle-expr = { version = "0.1.0", path = "crates/expr" }
+ingot-expr = { version = "0.1.0", path = "crates/expr" }
 parking_lot = "0.12.5"
 prometheus = { version = "0.14.0", default-features = false, features = ["process"] }
 rand = "0.10.3"

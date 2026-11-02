@@ -1,4 +1,4 @@
-//! oxidle: an Inngest-compatible durable execution server.
+//! Ingot: an Inngest-compatible durable execution server.
 
 pub mod api;
 pub mod auth;
@@ -39,7 +39,7 @@ pub async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let meta: Arc<dyn store::MetaStore> = sql.clone();
     let state: Arc<dyn store::StateStore> = match &cfg.redis_uri {
         Some(uri) => {
-            let prefix = std::env::var("OXIDLE_REDIS_PREFIX").unwrap_or_else(|_| "oxidle".into());
+            let prefix = std::env::var("INGOT_REDIS_PREFIX").unwrap_or_else(|_| "ingot".into());
             let r = store::redis::RedisStore::connect(uri, &prefix).await?;
             tracing::info!("execution state: redis");
             Arc::new(r)
@@ -53,7 +53,7 @@ pub async fn run(cfg: config::Config) -> anyhow::Result<()> {
     engine.start(events_rx).await?;
     let app = api::router(engine.clone());
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    tracing::info!(addr = %addr, kind = engine.cfg.server_kind(), "oxidle listening");
+    tracing::info!(addr = %addr, kind = engine.cfg.server_kind(), "ingot listening");
 
     let (stop_http, mut http_stopped) = tokio::sync::watch::channel(false);
     let mut server = tokio::spawn(async move {

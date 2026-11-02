@@ -3,7 +3,7 @@
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "oxidle", version, about = "Inngest-compatible durable execution server")]
+#[command(name = "ingot", version, about = "Inngest-compatible durable execution server")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -77,11 +77,11 @@ pub struct HealthcheckArgs {
     #[arg(long)]
     pub verbose: bool,
 
-    /// Accepted for compatibility; oxidle has no Connect gateway to probe.
+    /// Accepted for compatibility; Ingot has no Connect gateway to probe.
     #[arg(long, hide = true)]
     pub skip_connect_gateway: bool,
 
-    /// Accepted for compatibility; oxidle has no Connect gateway to probe.
+    /// Accepted for compatibility; Ingot has no Connect gateway to probe.
     #[arg(long, hide = true)]
     pub connect_gateway_port: Option<u16>,
 }
@@ -160,16 +160,16 @@ pub struct ServerArgs {
     pub no_ui: bool,
 
     /// Directory with the built dashboard UI (default: ./ui/dist, then <binary dir>/ui).
-    #[arg(long, env = "OXIDLE_UI_DIR")]
+    #[arg(long, env = "INGOT_UI_DIR")]
     pub ui_dir: Option<String>,
 
     /// Days to retain finished run state and events (0 = forever).
-    #[arg(long, env = "OXIDLE_RETENTION_DAYS", default_value_t = 7)]
+    #[arg(long, env = "INGOT_RETENTION_DAYS", default_value_t = 7)]
     pub retention_days: u64,
 
     /// Seconds to drain in-flight work on SIGTERM before exiting. Keep it below the
     /// orchestrator's kill timeout (Kubernetes: terminationGracePeriodSeconds, default 30).
-    #[arg(long, env = "OXIDLE_SHUTDOWN_TIMEOUT", default_value_t = 25)]
+    #[arg(long, env = "INGOT_SHUTDOWN_TIMEOUT", default_value_t = 25)]
     pub shutdown_timeout: u64,
 }
 

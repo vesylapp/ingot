@@ -81,7 +81,7 @@ pub fn parse_function(
                     return err("trigger event name too long");
                 }
                 if let Some(expr) = trig.expression.as_deref().filter(|e| !e.is_empty()) {
-                    oxidle_expr::Expression::compile(expr)
+                    ingot_expr::Expression::compile(expr)
                         .map_err(|e| ConfigError(format!("invalid trigger expression: {e}")))?;
                 }
             }
@@ -212,7 +212,7 @@ pub fn parse_function(
             None => get_str(&c, "if").map(String::from),
         };
         if let Some(e) = &if_expr {
-            let compiled = oxidle_expr::Expression::compile(e)
+            let compiled = ingot_expr::Expression::compile(e)
                 .map_err(|e| ConfigError(format!("invalid cancel expression: {e}")))?;
             compiled
                 .validate_restrictive()
@@ -261,7 +261,7 @@ pub fn parse_function(
     exprs.extend(singleton.iter().filter_map(|t| t.key.as_deref()));
     exprs.extend(priority_run.as_deref());
     for e in exprs {
-        oxidle_expr::Expression::compile(e)
+        ingot_expr::Expression::compile(e)
             .map_err(|er| ConfigError(format!("invalid expression '{e}': {er}")))?;
     }
 

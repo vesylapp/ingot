@@ -1,33 +1,33 @@
 #!/usr/bin/env bash
-# Benchmark matrix: {oxidle, inngest} x {sqlite, postgres, redis}, everything in Docker on one
+# Benchmark matrix: {ingot, inngest} x {sqlite, postgres, redis}, everything in Docker on one
 # network so both servers see identical networking. Appends one JSON line per measurement to $OUT.
 #
 #   ./bench/matrix.sh
-#   TARGETS=oxidle BACKENDS=redis REPS=1 ./bench/matrix.sh
+#   TARGETS=ingot BACKENDS=redis REPS=1 ./bench/matrix.sh
 #
 # Knobs: N (events per throughput run), REPS, RATE/DURATION (latency runs), INNGEST_IMAGE,
 # SPECS (sessions separated by "|", e.g. "throughput:one|latency:three"),
-# OXIDLE_IMAGE (built from ./Dockerfile unless SKIP_BUILD=1), SERVER_ARGS (extra flags for both servers),
+# INGOT_IMAGE (built from ./Dockerfile unless SKIP_BUILD=1), SERVER_ARGS (extra flags for both servers),
 # SERVER_DOCKER_ARGS (extra `docker run` flags for the server, e.g. "--tmpfs /tmp/db"), OUT.
 # BACKENDS may also include redis-postgres (queue/state in Redis, history in Postgres).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-TARGETS=${TARGETS:-"oxidle inngest"}
+TARGETS=${TARGETS:-"ingot inngest"}
 BACKENDS=${BACKENDS:-"sqlite postgres redis"}
 N=${N:-2000}
 REPS=${REPS:-3}
 RATE=${RATE:-5}
 DURATION=${DURATION:-20}
 INNGEST_IMAGE=${INNGEST_IMAGE:-inngest/inngest:v1.49.0}
-OXIDLE_IMAGE=${OXIDLE_IMAGE:-oxidle:bench}
+INGOT_IMAGE=${INGOT_IMAGE:-ingot:bench}
 OUT=${OUT:-bench/results/$(date +%Y%m%d-%H%M%S).jsonl}
 NET=oxbench
 KEY=8b1d8a3c4f0e2d9b7a6c5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b
 EVENT_KEY=bench-event-key
 mkdir -p "$(dirname "$OUT")"
 
-[[ -n "${SKIP_BUILD:-}" ]] || docker build -q -t "$OXIDLE_IMAGE" . >/dev/null
+[[ -n "${SKIP_BUILD:-}" ]] || docker build -q -t "$INGOT_IMAGE" . >/dev/null
 docker pull -q "$INNGEST_IMAGE" >/dev/null
 
 teardown() {
@@ -111,8 +111,8 @@ for target in $TARGETS; do
       docker run -d --name bench-server --network "$NET" ${SERVER_ENV:-} ${SERVER_DOCKER_ARGS:-} "$INNGEST_IMAGE" inngest "${args[@]}" >/dev/null
       version=$(docker exec bench-server inngest version 2>/dev/null | head -1)
     else
-      docker run -d --name bench-server --network "$NET" -e RUST_LOG=oxidle=warn ${SERVER_DOCKER_ARGS:-} "$OXIDLE_IMAGE" "${args[@]}" >/dev/null
-      version=$(docker exec bench-server oxidle --version | awk '{print $2}')
+      docker run -d --name bench-server --network "$NET" -e RUST_LOG=ingot=warn ${SERVER_DOCKER_ARGS:-} "$INGOT_IMAGE" "${args[@]}" >/dev/null
+      version=$(docker exec bench-server ingot --version | awk '{print $2}')
     fi
     docker run -d --name bench-app --network "$NET" -v "$PWD/e2e/app:/app" -w /app \
       -e INNGEST_DEV=0 -e INNGEST_BASE_URL=http://bench-server:8288 \

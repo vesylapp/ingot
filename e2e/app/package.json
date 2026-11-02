@@ -1,5 +1,5 @@
 {
-  "name": "oxidle-e2e",
+  "name": "ingot-e2e",
   "private": true,
   "type": "module",
   "dependencies": {

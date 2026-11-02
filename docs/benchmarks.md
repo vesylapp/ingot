@@ -1,6 +1,6 @@
 # Benchmarks
 
-oxidle compared with the official self-hosted Inngest server (`inngest start`) on each
+Ingot compared with the official self-hosted Inngest server (`inngest start`) on each
 storage backend, using the same SDK app, the same workload and the same Docker network.
 
 ![Throughput: completed runs per second, by backend](benchmarks/throughput.svg)
@@ -14,7 +14,7 @@ Medians of 3 repetitions. Throughput runs send 2,000 events in batches of 200.
 
 ### Throughput (runs/s, higher is better)
 
-| Backend | Function | oxidle 0.1.3 | Inngest 1.49.0 | oxidle advantage |
+| Backend | Function | Ingot 0.1.3 | Inngest 1.49.0 | Ingot advantage |
 |---|---|--:|--:|--:|
 | SQLite | no steps | 748 | 8 | **94×** |
 | SQLite | 3 steps | 584 | 7 | **83×** |
@@ -31,13 +31,13 @@ Event sent → last step of a 3-step function finished, 100 events sent one at a
 
 | Backend | Server | p50 | p95 | p99 |
 |---|---|--:|--:|--:|
-| SQLite | oxidle 0.1.3 | 17 | 32 | 44 |
+| SQLite | Ingot 0.1.3 | 17 | 32 | 44 |
 | SQLite | Inngest 1.49.0 | 320 | 550 | 583 |
-| Postgres | oxidle 0.1.3 | 38 | 51 | 72 |
+| Postgres | Ingot 0.1.3 | 38 | 51 | 72 |
 | Postgres | Inngest 1.49.0 | 243 | 386 | 429 |
-| Redis | oxidle 0.1.3 | 15 | 21 | 38 |
+| Redis | Ingot 0.1.3 | 15 | 21 | 38 |
 | Redis | Inngest 1.49.0 | 324 | 612 | 948 |
-| Redis + Postgres | oxidle 0.1.3 | 21 | 28 | 37 |
+| Redis + Postgres | Ingot 0.1.3 | 21 | 28 | 37 |
 | Redis + Postgres | Inngest 1.49.0 | 240 | 389 | 435 |
 
 ### Resource use
@@ -46,13 +46,13 @@ CPU is the total CPU time spent by the server container plus the database contai
 
 | Backend | Server | CPU per run (ms) | Peak server memory (MB) |
 |---|---|--:|--:|
-| SQLite | oxidle 0.1.3 | 1.66 | 49 |
+| SQLite | Ingot 0.1.3 | 1.66 | 49 |
 | SQLite | Inngest 1.49.0 | 44.45 | 429 |
-| Postgres | oxidle 0.1.3 | 4.91 | 52 |
+| Postgres | Ingot 0.1.3 | 4.91 | 52 |
 | Postgres | Inngest 1.49.0 | 29.92 | 253 |
-| Redis | oxidle 0.1.3 | 0.81 | 46 |
+| Redis | Ingot 0.1.3 | 0.81 | 46 |
 | Redis | Inngest 1.49.0 | 29.79 | 354 |
-| Redis + Postgres | oxidle 0.1.3 | 1.46 | 43 |
+| Redis + Postgres | Ingot 0.1.3 | 1.46 | 43 |
 | Redis + Postgres | Inngest 1.49.0 | 27.60 | 189 |
 <!-- results:end -->
 
@@ -83,7 +83,7 @@ the median is reported.
 
 The servers split storage differently, so the same flag means slightly different things:
 
-| `BACKEND` | oxidle | Inngest |
+| `BACKEND` | Ingot | Inngest |
 |---|---|---|
 | `sqlite` | everything in SQLite (`--sqlite-dir`) | history in SQLite; queue and run state in its built-in in-memory Redis |
 | `postgres` | everything in Postgres (`--postgres-uri`) | history in Postgres; queue and run state in its built-in in-memory Redis |
@@ -99,7 +99,7 @@ Inngest (see below).
 
 - Apple M4 (10 cores), 24 GB RAM, macOS 27.0.1
 - OrbStack (Docker 29.8.2, Linux 7.2.9 arm64 VM)
-- `inngest/inngest:v1.49.0` (arm64 image) and oxidle 0.1.3 built from `./Dockerfile` (release profile)
+- `inngest/inngest:v1.49.0` (arm64 image) and Ingot 0.1.3 built from `./Dockerfile` (release profile)
 - Postgres `postgres:16-alpine`, Redis `redis:7-alpine`, app on `node:22-alpine`
 - Nothing else running on the machine during the runs.
 - No CPU or memory limits on containers. The server, database, SDK app and load generator all share
@@ -132,10 +132,10 @@ with Postgres anywhere in the picture it reaches 200–360.
   boundary` warnings, where scheduling a single event waited seconds on SQLite. On a disk with
   faster fsync than this VM's the SQLite rows would improve, but it remains the bottleneck.
 
-oxidle opens SQLite in WAL mode with `synchronous=NORMAL` and writes run timelines through a
+Ingot opens SQLite in WAL mode with `synchronous=NORMAL` and writes run timelines through a
 batched background writer, so fsync matters far less to it: the same RAM-disk test moves it from
 748 to 1,024 runs/s (no steps), where Inngest gains about 30×. Its SQLite rows trail Postgres for a different reason: SQLite allows
-one writer at a time, and oxidle keeps queue, run state and history in that one file, so every
+one writer at a time, and Ingot keeps queue, run state and history in that one file, so every
 write takes the same lock (`BEGIN IMMEDIATE`). Postgres lets workers write different rows
 concurrently, and Redis keeps the hot queue/state path out of SQL entirely.
 
@@ -159,12 +159,12 @@ servers (2 repetitions each):
 
 | `--postgres-max-idle-conns 100` | no steps | 3 steps |
 |---|--:|--:|
-| oxidle 0.1.3 | 1,109–1,284 | 592–728 |
+| Ingot 0.1.3 | 1,109–1,284 | 592–728 |
 | Inngest 1.49.0 | 507–531 | 394–398 |
 
-So on a tuned Postgres setup oxidle is roughly 2× faster; on the defaults, and on any setup that
+So on a tuned Postgres setup Ingot is roughly 2× faster; on the defaults, and on any setup that
 keeps SQLite, the gap is much larger. Memory is a consistent difference either way: Inngest's
-server peaks at 190–430 MB depending on the backend; oxidle stays at or under 52 MB in every
+server peaks at 190–430 MB depending on the backend; Ingot stays at or under 52 MB in every
 configuration.
 
 These are numbers for the single-node self-hosted server. Inngest Cloud is a different,
@@ -174,7 +174,7 @@ horizontally scaled deployment and is not measured here.
 
 ```sh
 ./bench/matrix.sh                             # full matrix, about an hour (Inngest dominates)
-TARGETS=oxidle BACKENDS=redis REPS=1 ./bench/matrix.sh   # a single cell
+TARGETS=ingot BACKENDS=redis REPS=1 ./bench/matrix.sh   # a single cell
 python3 bench/report.py bench/results/<file>.jsonl     # regenerate charts + the tables above
 ```
 
@@ -189,10 +189,10 @@ Knobs: `N` (events per throughput run), `REPS`, `RATE` / `DURATION` (latency run
 For a quicker check against a server running on the host, `BENCH=1 ./e2e/run.sh` runs the same
 throughput workload through the e2e harness.
 
-## Why oxidle is faster
+## Why Ingot is faster
 
 The biggest driver is how much database work each run does: **Inngest makes about 46 database
-commits per 3-step run; oxidle makes about 4.**
+commits per 3-step run; Ingot makes about 4.**
 
 Measured on the Redis + Postgres setup (the most like-for-like comparison): 1,000 three-step runs
 plus the 200 no-step warm-up runs, counted from Postgres's own statistics and exact row counts
@@ -200,11 +200,11 @@ afterwards.
 
 | | Postgres commits | Rows written | Redis commands |
 |---|--:|--:|--:|
-| oxidle 0.1.3 | 5,047 | ~7,800 (4,200 timeline spans, events, runs) | 78K |
+| Ingot 0.1.3 | 5,047 | ~7,800 (4,200 timeline spans, events, runs) | 78K |
 | Inngest 1.49.0 | 54,865 | ~29,600 (13,800 spans, 6,000 history, 3,800 traces, events, runs, …) | 171K |
 
 Inngest writes each trace span and history entry as it happens, mostly in its own transaction.
-oxidle stores less telemetry (4 timeline rows per 3-step run: one per step plus finalization,
+Ingot stores less telemetry (4 timeline rows per 3-step run: one per step plus finalization,
 which is what the dashboard needs) and hands those rows to a background writer that batches them
 into a few commits, off the execution path. That one difference explains most of the gap:
 
@@ -220,32 +220,32 @@ server; Inngest's slow repetition hit the connection churn described above.
 
 | CPU per run (ms) | Server | Postgres | Redis | SDK app |
 |---|--:|--:|--:|--:|
-| oxidle 0.1.3 (892 runs/s) | 0.55 | 0.71 | 0.14 | 1.56 |
+| Ingot 0.1.3 (892 runs/s) | 0.55 | 0.71 | 0.14 | 1.56 |
 | Inngest 1.49.0 (240 runs/s) | 8.88 | 17.77 | 1.02 | 3.48 |
 
 - **Postgres** is Inngest's largest cost, about two-thirds of its server-side CPU, against 0.7 ms
-  for oxidle.
+  for Ingot.
 - **The server process itself** is the second driver: 8.9 ms against 0.55 ms (about 16×), covering
   Inngest's tracing pipeline, capacity checks and roughly twice as many Redis calls. Together
   with the database work, Inngest's server side uses about 6.6 of this machine's 10 cores at
   ~240 runs/s.
-- **oxidle is not the bottleneck in its own numbers.** Its server and databases use about 1.4 ms
+- **Ingot is not the bottleneck in its own numbers.** Its server and databases use about 1.4 ms
   per run, roughly 1.25 of 10 cores at ~900 runs/s, while the Node SDK app uses more CPU per run
-  than oxidle's server does. The oxidle figures on this page are a floor, set largely by the test
-  app, not oxidle's ceiling.
+  than Ingot's server does. The Ingot figures on this page are a floor, set largely by the test
+  app, not Ingot's ceiling.
 
 ### Latency
 
 Latency is driven differently. Inngest checks its queue on a timer (`--tick`, 150 ms by
-default), while oxidle wakes a worker as soon as work is queued. Polling explains part of
+default), while Ingot wakes a worker as soon as work is queued. Polling explains part of
 Inngest's ~240 ms idle latency: with `--tick 10` its median dropped from 238 to 168 ms
 (p95 391 → 286 ms). The rest is per-step work, including the synchronous writes above.
 
 ### Trade-offs
 
-- **Part of the gap is oxidle doing less.** It doesn't keep Inngest's per-event `history` table
+- **Part of the gap is Ingot doing less.** It doesn't keep Inngest's per-event `history` table
   or its detailed OpenTelemetry spans, so tools that read those wouldn't find them.
-- **oxidle's SQLite setting trades some durability for speed.** With WAL and
+- **Ingot's SQLite setting trades some durability for speed.** With WAL and
   `synchronous=NORMAL`, a power loss (not a process crash) can lose the last few commits, though
   the file won't be corrupted. Inngest syncs SQLite fully on every commit.
 

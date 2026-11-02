@@ -1,4 +1,4 @@
-# oxidle
+# Ingot
 
 An Inngest-compatible durable execution server written in Rust. It is a drop-in replacement
 for the self-hosted Inngest server (`inngest start`): existing Inngest SDK apps send events,
@@ -10,13 +10,13 @@ sync, and execute against it unchanged.
 cargo build --release
 
 # Self-hosted mode (same flags/env vars as `inngest start`)
-./target/release/oxidle start \
+./target/release/ingot start \
   --event-key my-event-key \
   --signing-key 8b1d8a3c4f0e2d9b7a6c5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b \
   --sdk-url http://localhost:3000/api/inngest
 
 # Development mode (no keys required, server kind "dev")
-./target/release/oxidle dev
+./target/release/ingot dev
 ```
 
 ## Docker
@@ -26,7 +26,7 @@ Multi-arch images (linux/amd64, linux/arm64) are published to GitHub Container R
 
 | Tag | Updated by |
 |---|---|
-| `ghcr.io/benwyrosdick/oxidle:latest`, `:main` | every push to `main` |
+| `ghcr.io/benwyrosdick/ingot:latest`, `:main` | every push to `main` |
 | `:1.2.3`, `:1.2`, `:1` | pushing a `v1.2.3` tag (`:1` is skipped for `v0.x`) |
 | `:sha-<short>` | every published build, for pinning |
 
@@ -36,7 +36,7 @@ bump, so 0.1.13 → 0.2.0), builds, commits, then pushes the commit and a `vX.Y.
 publishes the versioned image.
 
 ```sh
-docker run -p 8288:8288 -v oxidle-data:/data ghcr.io/benwyrosdick/oxidle:latest \
+docker run -p 8288:8288 -v ingot-data:/data ghcr.io/benwyrosdick/ingot:latest \
   start --event-key my-event-key --signing-key 8b1d8a3c4f0e...
 ```
 
@@ -47,7 +47,7 @@ the easiest way to run it from another app's Compose file:
 ```yaml
 services:
   inngest:
-    image: ghcr.io/benwyrosdick/oxidle:latest
+    image: ghcr.io/benwyrosdick/ingot:latest
     ports: ["8288:8288"]
     environment:
       INNGEST_EVENT_KEY: my-event-key
@@ -74,10 +74,10 @@ volumes:
 ```
 
 Your app then uses `INNGEST_BASE_URL=http://inngest:8288` inside the Compose network. Without
-the Postgres/Redis variables oxidle uses SQLite in `/data`; mount a volume there to keep it.
+the Postgres/Redis variables Ingot uses SQLite in `/data`; mount a volume there to keep it.
 The image runs as a non-root user (uid 10001), includes the dashboard (see
-[Dashboard](#dashboard)), and declares a Docker `HEALTHCHECK` that runs `oxidle healthcheck`, so
-Compose picks it up without extra configuration. Build it locally with `docker build -t oxidle .`
+[Dashboard](#dashboard)), and declares a Docker `HEALTHCHECK` that runs `ingot healthcheck`, so
+Compose picks it up without extra configuration. Build it locally with `docker build -t ingot .`
 (`--build-arg UI=false` leaves the dashboard out).
 
 GHCR makes a new package private by default. After the first publish, open the package's
@@ -105,21 +105,21 @@ curl -X POST http://localhost:8288/e/my-event-key -d '{"name":"app/user.created"
 Measured against the official self-hosted server (`inngest/inngest:v1.49.0`) with the same SDK
 app and workload, all in Docker on one machine (Apple M4):
 
-| Backend | oxidle runs/s (no steps / 3 steps) | Inngest runs/s | Latency p50 (oxidle / Inngest) |
+| Backend | Ingot runs/s (no steps / 3 steps) | Inngest runs/s | Latency p50 (Ingot / Inngest) |
 |---|--:|--:|--:|
 | SQLite | 748 / 584 | 8 / 7 | 17 ms / 320 ms |
 | Postgres | 1,291 / 758 | 321 / 216 | 38 ms / 243 ms |
 | Redis | 2,353 / 1,027 | 9 / 7 | 15 ms / 324 ms |
 | Redis + Postgres | 1,925 / 884 | 360 / 240 | 21 ms / 240 ms |
 
-oxidle also uses 6–37× less CPU per run and about 50 MB of memory (Inngest: 190–430 MB).
+Ingot also uses 6–37× less CPU per run and about 50 MB of memory (Inngest: 190–430 MB).
 Inngest is slow whenever it writes history to SQLite (including its Redis-only setup, which still
 uses SQLite for history) because it syncs SQLite to disk on every commit; with Postgres it reaches
 200–360 runs/s. Methodology, charts and the full analysis: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Dashboard
 
-oxidle serves Inngest's own dashboard UI (runs, run timelines with steps/attempts/outputs,
+Ingot serves Inngest's own dashboard UI (runs, run timelines with steps/attempts/outputs,
 events, apps, functions, rerun / rerun-from-step, cancel, invoke) backed by a compatible
 GraphQL API at `/v0/gql`.
 
@@ -130,14 +130,14 @@ To run the binary outside Docker with the dashboard, build it once (uses bun ins
 
 ```sh
 ./ui/build.sh                 # writes ui/dist
-./target/release/oxidle start ...   # serves ui/dist automatically (or pass --ui-dir)
+./target/release/ingot start ...   # serves ui/dist automatically (or pass --ui-dir)
 ```
 
 Then open `http://localhost:8288`. `--no-ui` disables both the UI and `/v0/gql`.
 As in the reference server, `/v0/gql` is unauthenticated — keep the port on a trusted network.
 
 Not backed by data yet: Insights (SQL), Sessions, Connect worker lists. The UI's "Send event"
-button posts with a placeholder event key, so it only works in `oxidle dev` mode.
+button posts with a placeholder event key, so it only works in `ingot dev` mode.
 
 ## Metrics
 
@@ -160,26 +160,26 @@ As in Inngest, the `_total` counters are only recorded when `INNGEST_EXPERIMENTA
 retryable way (including network errors) and `failed` when not; a step that throws is reported by
 the SDK as a normal response, so it counts as `success`, as in Inngest.
 
-**oxidle-specific** (always on):
+**Ingot-specific** (always on):
 
 | Metric | Type | Labels |
 |---|---|---|
-| `oxidle_queue_ready_items` | gauge | — items due now and waiting for a worker |
-| `oxidle_queue_lag_seconds` | gauge | — age of the oldest due item (0 when none is waiting) |
-| `oxidle_queue_in_progress` | gauge | `kind` (`start`, `edge`, `sleep`, `pause`, `cron`, …) |
-| `oxidle_queue_items_processed_total` | counter | `kind`, `outcome` (`done`, `retry`, `delay`, `error`) |
-| `oxidle_sdk_request_duration_seconds` | histogram | `fn`, `status` |
-| `oxidle_function_run_duration_seconds` | histogram | `fn`, `status` — scheduled to ended, including sleeps and waits |
-| `oxidle_events_received_total` | counter | `source` (`api`, `internal`, `cron`) |
-| `oxidle_http_request_duration_seconds` | histogram | `method`, `route` (pattern, e.g. `/e/{key}`), `status` |
-| `oxidle_functions` | gauge | — functions currently registered |
-| `oxidle_store_up` | gauge | `store` (`database`, `state`) — 1 if it answered a ping this scrape |
-| `oxidle_retention_deleted_rows_total` | counter | `table` (`function_runs`, `run_spans`, `events`) |
-| `oxidle_build_info` | gauge | `version` |
+| `ingot_queue_ready_items` | gauge | — items due now and waiting for a worker |
+| `ingot_queue_lag_seconds` | gauge | — age of the oldest due item (0 when none is waiting) |
+| `ingot_queue_in_progress` | gauge | `kind` (`start`, `edge`, `sleep`, `pause`, `cron`, …) |
+| `ingot_queue_items_processed_total` | counter | `kind`, `outcome` (`done`, `retry`, `delay`, `error`) |
+| `ingot_sdk_request_duration_seconds` | histogram | `fn`, `status` |
+| `ingot_function_run_duration_seconds` | histogram | `fn`, `status` — scheduled to ended, including sleeps and waits |
+| `ingot_events_received_total` | counter | `source` (`api`, `internal`, `cron`) |
+| `ingot_http_request_duration_seconds` | histogram | `method`, `route` (pattern, e.g. `/e/{key}`), `status` |
+| `ingot_functions` | gauge | — functions currently registered |
+| `ingot_store_up` | gauge | `store` (`database`, `state`) — 1 if it answered a ping this scrape |
+| `ingot_retention_deleted_rows_total` | counter | `table` (`function_runs`, `run_spans`, `events`) |
+| `ingot_build_info` | gauge | `version` |
 | `process_*` | various | standard process CPU, memory and file descriptors (Linux) |
 
 The queue gauges read the shared store, so every node reports the same value; use `max`, not
-`sum`, across nodes. Counters, histograms and `oxidle_queue_in_progress` are per node.
+`sum`, across nodes. Counters, histograms and `ingot_queue_in_progress` are per node.
 
 ## Storage backends
 
@@ -190,7 +190,7 @@ The queue gauges read the shared store, so every node reports the same value; us
 | `--redis-uri` (+ either of the above) | SQLite / Postgres | Redis (atomic Lua scripts) — fastest |
 
 Unlike the reference server's default (in-memory Redis that is lost on restart), every
-oxidle configuration is durable. Multiple oxidle nodes can share Postgres or Redis.
+Ingot configuration is durable. Multiple Ingot nodes can share Postgres or Redis.
 
 ## Configuration
 
@@ -200,30 +200,30 @@ All `inngest start` flags are accepted with the same `INNGEST_*` environment var
 `--postgres-conn-max-idle-time`, `--postgres-conn-max-lifetime`, `--poll-interval`,
 `--retry-interval`, `--queue-workers`, `--tick`, `--no-ui`, `--json`, `--log-level`.
 
-oxidle-specific: `--retention-days` / `OXIDLE_RETENTION_DAYS` (default 7) prunes finished run
-state, events and history; `--shutdown-timeout` / `OXIDLE_SHUTDOWN_TIMEOUT` (seconds, default
-25) bounds the drain on SIGTERM; `--ui-dir` / `OXIDLE_UI_DIR` points at the built dashboard;
-`OXIDLE_REDIS_PREFIX` (default `oxidle`) namespaces Redis keys.
+Ingot-specific: `--retention-days` / `INGOT_RETENTION_DAYS` (default 7) prunes finished run
+state, events and history; `--shutdown-timeout` / `INGOT_SHUTDOWN_TIMEOUT` (seconds, default
+25) bounds the drain on SIGTERM; `--ui-dir` / `INGOT_UI_DIR` points at the built dashboard;
+`INGOT_REDIS_PREFIX` (default `ingot`) namespaces Redis keys.
 
 `--json` or `LOG_HANDLER=json` writes one JSON object per line with Google Cloud Logging's
 fields, so GKE picks up each line's severity and summary:
-`{"time":"…Z","severity":"WARNING","level":"WARN","message":"…","target":"oxidle::…",…}`.
+`{"time":"…Z","severity":"WARNING","level":"WARN","message":"…","target":"ingot::…",…}`.
 Event fields (`run_id`, `function`, `error`, …) are top-level keys, as in Inngest's JSON logs, and
 `level` is kept for filters written against it.
 
 ## Running in production
 
-**Health.** `oxidle healthcheck` probes a running server from inside its container and exits
+**Health.** `ingot healthcheck` probes a running server from inside its container and exits
 non-zero on failure, so healthchecks don't need curl. It takes the same flags and defaults as
 `inngest alpha doctor healthcheck` (`--host 127.0.0.1`, `--port`/`INNGEST_PORT` 8288,
 `--timeout 5s`, `--verbose`), which also works as a command name, plus `--ready` to probe `/ready`
 instead of `/health`. `GET /health` is a liveness check (always 200 while the process runs, as in
 Inngest). `GET /ready` is a readiness check: 503 while shutting down, or when the database or
 the state store (Redis, if configured) doesn't answer a ping within 2 seconds, with the failing
-check named in the response. `oxidle_store_up{store="database"|"state"}` reports the same on
+check named in the response. `ingot_store_up{store="database"|"state"}` reports the same on
 `/metrics`, which keeps answering when a store is down.
 
-**Shutdown.** On SIGTERM (or Ctrl-C) oxidle stops leasing queue items and reports not ready,
+**Shutdown.** On SIGTERM (or Ctrl-C) Ingot stops leasing queue items and reports not ready,
 then gives in-flight steps most of the `--shutdown-timeout` budget to finish (HTTP stays up
 meanwhile, since SDKs call back into the API to finish a step). Steps still running at that
 point are handed back to the queue, so another node starts them at once instead of after the
@@ -237,7 +237,7 @@ history older than `--retention-days`: finished runs with their timelines, then 
 remaining run refers to (so a run sleeping past the retention period keeps its trigger event),
 plus finished run state and expired queue, idempotency and pause markers. Deletes run in
 transactions of 5,000 rows with a time budget per pass, so a backlog is worked off over several
-passes. `oxidle_retention_deleted_rows_total{table}` counts what was removed. No external
+passes. `ingot_retention_deleted_rows_total{table}` counts what was removed. No external
 cleanup job is needed.
 
 **Migrations** run at startup. On Postgres an advisory lock serializes nodes that start
@@ -284,21 +284,21 @@ durable endpoints (`POST /v1/checkpoint`), and the `/v2` API.
 
 ```sh
 cargo test --workspace                          # unit, expression oracle, store conformance (SQLite)
-OXIDLE_TEST_REDIS=redis://127.0.0.1:6379 cargo test --test state_store   # + Redis
-OXIDLE_TEST_POSTGRES=postgres://postgres:pw@127.0.0.1:5432/postgres cargo test   # + Postgres (migrations, retention)
+INGOT_TEST_REDIS=redis://127.0.0.1:6379 cargo test --test state_store   # + Redis
+INGOT_TEST_POSTGRES=postgres://postgres:pw@127.0.0.1:5432/postgres cargo test   # + Postgres (migrations, retention)
 
 ./e2e/run.sh                     # end-to-end with the real JS SDK (Docker), SQLite
 BACKEND=postgres ./e2e/run.sh    # ... Postgres
 BACKEND=redis ./e2e/run.sh       # ... Redis
 TARGET=inngest ./e2e/run.sh      # same suite against the official inngest/inngest image
 BENCH=1 N=2000 ./e2e/run.sh      # quick throughput check (combine with BACKEND/TARGET)
-./bench/matrix.sh                # full oxidle-vs-Inngest benchmark matrix (Docker), see docs/benchmarks.md
+./bench/matrix.sh                # full ingot-vs-Inngest benchmark matrix (Docker), see docs/benchmarks.md
 KEEP=1 ./e2e/run.sh              # leave server + app running to explore the dashboard
 ./e2e/shutdown.sh                # SIGTERM mid-work: nothing lost, in-flight steps finished or handed back
 ```
 
 The e2e suite (34 scenarios covering every feature above) passes against the official
-Inngest server, which validates the expectations, and against oxidle on all three backends.
+Inngest server, which validates the expectations, and against Ingot on all three backends.
 
 ## Architecture
 

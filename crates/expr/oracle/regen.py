@@ -12,7 +12,7 @@ import subprocess
 import sys
 from collections import defaultdict
 
-# Intentional deviations from Go (see the oxidle-expr crate docs); kept out of the fixture.
+# Intentional deviations from Go (see the ingot-expr crate docs); kept out of the fixture.
 SKIP = {
     "'''multi",
     'line\'\'\' == "multi\\nline"',

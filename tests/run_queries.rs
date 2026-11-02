@@ -1,23 +1,23 @@
 //! Dashboard run lists: keyset pagination returns every run exactly once, in order, for each
 //! time field and filter, including runs that share a timestamp.
 //!
-//! Runs on SQLite, and on Postgres too when `OXIDLE_TEST_POSTGRES` is set.
+//! Runs on SQLite, and on Postgres too when `INGOT_TEST_POSTGRES` is set.
 
-use oxidle::store::sql::{PoolConfig, SqlStore};
-use oxidle::store::{MetaStore, RunQuery, RunTimeField};
-use oxidle::types::*;
+use ingot::store::sql::{PoolConfig, SqlStore};
+use ingot::store::{MetaStore, RunQuery, RunTimeField};
+use ingot::types::*;
 use serde_json::json;
 use ulid::Ulid;
 use uuid::Uuid;
 
 async fn stores() -> Vec<(String, SqlStore)> {
-    let path = std::env::temp_dir().join(format!("oxidle-runs-{}.db", Ulid::generate()));
+    let path = std::env::temp_dir().join(format!("ingot-runs-{}.db", Ulid::generate()));
     let url = format!("sqlite://{}?mode=rwc", path.display());
     let mut out = vec![("sqlite".to_string(), SqlStore::connect(&url, PoolConfig::default()).await.unwrap())];
-    if let Ok(admin_url) = std::env::var("OXIDLE_TEST_POSTGRES") {
+    if let Ok(admin_url) = std::env::var("INGOT_TEST_POSTGRES") {
         sqlx::any::install_default_drivers();
         let admin = sqlx::AnyPool::connect(&admin_url).await.unwrap();
-        let db = format!("oxidle_runs_{}", Ulid::generate().to_string().to_lowercase());
+        let db = format!("ingot_runs_{}", Ulid::generate().to_string().to_lowercase());
         sqlx::query(&format!("CREATE DATABASE {db}")).execute(&admin).await.unwrap();
         let url = format!("{}/{db}", admin_url.rsplit_once('/').unwrap().0);
         out.push(("postgres".to_string(), SqlStore::connect(&url, PoolConfig::default()).await.unwrap()));

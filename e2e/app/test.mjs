@@ -7,7 +7,7 @@ const APP = process.env.APP_URL || "http://localhost:3939";
 const SIGNING_KEY = process.env.INNGEST_SIGNING_KEY;
 const EVENT_KEY = process.env.INNGEST_EVENT_KEY;
 const ONLY = process.env.ONLY ? process.env.ONLY.split(",") : null;
-// The reference server's v1 API returns empty outputs; only check REST output against oxidle.
+// The reference server's v1 API returns empty outputs; only check REST output against ingot.
 const STRICT_REST = process.env.TARGET !== "inngest";
 
 const inngest = new Inngest({ id: "e2e-runner" });
@@ -408,9 +408,9 @@ const tests = {
       ok(value(text, series) >= 1, `missing ${series}`);
     }
     if (STRICT_REST) {
-      ok(/^oxidle_build_info\{version="[^"]+"\} 1$/m.test(text), "build info");
-      ok(value(text, 'oxidle_events_received_total{source="api"}') >= 1, "events received");
-      ok(text.includes('oxidle_http_request_duration_seconds_count{method="POST",route="/e/{key}",status="200"}'), "http route label");
+      ok(/^ingot_build_info\{version="[^"]+"\} 1$/m.test(text), "build info");
+      ok(value(text, 'ingot_events_received_total{source="api"}') >= 1, "events received");
+      ok(text.includes('ingot_http_request_duration_seconds_count{method="POST",route="/e/{key}",status="200"}'), "http route label");
     }
   },
 

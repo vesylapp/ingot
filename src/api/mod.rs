@@ -213,7 +213,7 @@ async fn metrics(State(engine): State<AppState>) -> Response {
     }
 }
 
-/// Record `oxidle_http_request_duration_seconds`, labelled by route pattern (not raw path)
+/// Record `ingot_http_request_duration_seconds`, labelled by route pattern (not raw path)
 /// so cardinality stays bounded.
 async fn track_http(req: Request, next: Next) -> Response {
     let method = req.method().clone();

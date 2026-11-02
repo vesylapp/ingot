@@ -1,4 +1,4 @@
-//! `oxidle healthcheck`: probe a running server from inside its container, so container
+//! `ingot healthcheck`: probe a running server from inside its container, so container
 //! healthchecks don't need curl. Exits 0 when the endpoint answers 200, 1 otherwise.
 
 use crate::config::HealthcheckArgs;

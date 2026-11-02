@@ -5,7 +5,7 @@ use super::{Engine, IDEMPOTENCY_TTL_MS};
 use crate::store::CreateRun;
 use crate::types::*;
 use crate::util::hash36;
-use oxidle_expr::Vars;
+use ingot_expr::Vars;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use ulid::Ulid;

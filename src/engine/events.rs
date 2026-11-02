@@ -3,7 +3,7 @@
 use super::Engine;
 use super::schedule::{ScheduleOutcome, ScheduleRequest};
 use crate::types::*;
-use oxidle_expr::Vars;
+use ingot_expr::Vars;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::{Semaphore, mpsc};

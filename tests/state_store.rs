@@ -1,12 +1,12 @@
 //! Backend-agnostic conformance suite for [`StateStore`].
 //!
 //! Every scenario runs against `SqlStore` on a temporary SQLite file, and against
-//! `RedisStore` when `OXIDLE_TEST_REDIS` is set (e.g. `redis://127.0.0.1:6399`).
+//! `RedisStore` when `INGOT_TEST_REDIS` is set (e.g. `redis://127.0.0.1:6399`).
 
-use oxidle::store::redis::RedisStore;
-use oxidle::store::sql::{PoolConfig, SqlStore};
-use oxidle::store::{CreateRun, MetaUpdate, QueueStats, SaveStep, StateStore};
-use oxidle::types::*;
+use ingot::store::redis::RedisStore;
+use ingot::store::sql::{PoolConfig, SqlStore};
+use ingot::store::{CreateRun, MetaUpdate, QueueStats, SaveStep, StateStore};
+use ingot::types::*;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ struct Backend {
 
 async fn backends() -> Vec<Backend> {
     let mut out = Vec::new();
-    let path = std::env::temp_dir().join(format!("oxidle-state-{}.db", Ulid::generate()));
+    let path = std::env::temp_dir().join(format!("ingot-state-{}.db", Ulid::generate()));
     let url = format!("sqlite://{}?mode=rwc", path.display());
     let sql = SqlStore::connect(&url, PoolConfig::default())
         .await
@@ -41,7 +41,7 @@ async fn backends() -> Vec<Backend> {
         store: Arc::new(sql),
         cleanup: Cleanup::Sqlite(path),
     });
-    if let Ok(uri) = std::env::var("OXIDLE_TEST_REDIS")
+    if let Ok(uri) = std::env::var("INGOT_TEST_REDIS")
         && !uri.is_empty()
     {
         let prefix = format!("oxtest-{}", Ulid::generate());
@@ -1348,7 +1348,7 @@ async fn gc_impl(s: &dyn StateStore) {
 
 #[tokio::test]
 async fn redis_key_hygiene() {
-    let Ok(uri) = std::env::var("OXIDLE_TEST_REDIS") else {
+    let Ok(uri) = std::env::var("INGOT_TEST_REDIS") else {
         return;
     };
     if uri.is_empty() {

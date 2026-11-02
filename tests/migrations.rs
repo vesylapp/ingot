@@ -1,9 +1,9 @@
 //! Schema migrations: idempotent, and safe when several nodes start at once.
 //!
-//! The Postgres test runs when `OXIDLE_TEST_POSTGRES` is set
+//! The Postgres test runs when `INGOT_TEST_POSTGRES` is set
 //! (e.g. `postgres://postgres:pw@127.0.0.1:5499/postgres`).
 
-use oxidle::store::sql::{PoolConfig, SqlStore};
+use ingot::store::sql::{PoolConfig, SqlStore};
 use sqlx::Row;
 use ulid::Ulid;
 
@@ -19,7 +19,7 @@ async fn versions(url: &str) -> Vec<i64> {
 
 #[tokio::test]
 async fn sqlite_migrations_are_idempotent() {
-    let path = std::env::temp_dir().join(format!("oxidle-mig-{}.db", Ulid::generate()));
+    let path = std::env::temp_dir().join(format!("ingot-mig-{}.db", Ulid::generate()));
     let url = format!("sqlite://{}?mode=rwc", path.display());
     for _ in 0..3 {
         SqlStore::connect(&url, PoolConfig::default()).await.unwrap();
@@ -34,14 +34,14 @@ async fn sqlite_migrations_are_idempotent() {
 
 #[tokio::test]
 async fn postgres_nodes_starting_together() {
-    let Ok(admin_url) = std::env::var("OXIDLE_TEST_POSTGRES") else {
-        eprintln!("skipped: set OXIDLE_TEST_POSTGRES");
+    let Ok(admin_url) = std::env::var("INGOT_TEST_POSTGRES") else {
+        eprintln!("skipped: set INGOT_TEST_POSTGRES");
         return;
     };
     // A fresh database, so every migration runs while the nodes race.
     sqlx::any::install_default_drivers();
     let admin = sqlx::AnyPool::connect(&admin_url).await.unwrap();
-    let db = format!("oxidle_mig_{}", Ulid::generate().to_string().to_lowercase());
+    let db = format!("ingot_mig_{}", Ulid::generate().to_string().to_lowercase());
     sqlx::query(&format!("CREATE DATABASE {db}")).execute(&admin).await.unwrap();
     let base = admin_url.rsplit_once('/').unwrap().0;
     let url = format!("{base}/{db}");

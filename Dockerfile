@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Dependencies are compiled in their own layer (cargo-chef), so rebuilds after a source change
-# only recompile oxidle itself.
+# only recompile ingot itself.
 FROM rust:1-bookworm AS chef
 RUN cargo install cargo-chef --locked --version 0.1.78
 WORKDIR /src
@@ -17,7 +17,7 @@ RUN cargo chef cook --release --locked --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY src src
-RUN cargo build --release --locked --bin oxidle && cp target/release/oxidle /oxidle
+RUN cargo build --release --locked --bin ingot && cp target/release/ingot /ingot
 
 # The dashboard: Inngest's dev-server UI (SSPL), built with bun from a pinned Inngest commit.
 # Platform-independent, so it is built once on the build machine's own platform.
@@ -38,15 +38,15 @@ RUN mkdir -p /out && if [ "$UI" != "false" ]; then \
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 10001 --home-dir /data oxidle \
-    && mkdir -p /data && chown oxidle /data
-COPY --from=build /oxidle /usr/local/bin/oxidle
+    && useradd --system --uid 10001 --home-dir /data ingot \
+    && mkdir -p /data && chown ingot /data
+COPY --from=build /ingot /usr/local/bin/ingot
 # Served automatically from the binary's directory; disable with --no-ui.
 COPY --from=ui /out/ui /usr/local/bin/ui
-USER oxidle
+USER ingot
 WORKDIR /data
 VOLUME /data
 EXPOSE 8288
-HEALTHCHECK --interval=10s --timeout=6s --start-period=10s --retries=3 CMD ["oxidle", "healthcheck"]
-ENTRYPOINT ["oxidle"]
+HEALTHCHECK --interval=10s --timeout=6s --start-period=10s --retries=3 CMD ["ingot", "healthcheck"]
+ENTRYPOINT ["ingot"]
 CMD ["start"]

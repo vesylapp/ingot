@@ -15,7 +15,7 @@ FAILED=0
 
 cleanup() {
   [[ -n "${PID:-}" ]] && kill "$PID" 2>/dev/null || true
-  docker rm -f oxidle-e2e-app >/dev/null 2>&1 || true
+  docker rm -f ingot-e2e-app >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -27,11 +27,11 @@ for p in "$PORT" "$APP_PORT"; do
 done
 
 cargo build -q
-BIN=target/debug/oxidle
+BIN=target/debug/ingot
 
 # start <db dir> <log> <shutdown timeout>
 start() {
-  OXIDLE_SHUTDOWN_TIMEOUT=$3 RUST_LOG=oxidle=info "$BIN" start --port $PORT --signing-key $KEY \
+  INGOT_SHUTDOWN_TIMEOUT=$3 RUST_LOG=ingot=info "$BIN" start --port $PORT --signing-key $KEY \
     --event-key $EVENT_KEY --sqlite-dir "$1" --retry-interval 1 >"$2" 2>&1 &
   PID=$!
   for _ in $(seq 1 100); do curl -sf "localhost:$PORT/health" >/dev/null && return; sleep 0.2; done
@@ -52,8 +52,8 @@ check() {
 }
 
 start "$WORK/db" "$WORK/boot.log" 25
-docker rm -f oxidle-e2e-app >/dev/null 2>&1 || true
-docker run -d --name oxidle-e2e-app -p "$APP_PORT:3939" -v "$PWD/e2e/app:/app" -w /app \
+docker rm -f ingot-e2e-app >/dev/null 2>&1 || true
+docker run -d --name ingot-e2e-app -p "$APP_PORT:3939" -v "$PWD/e2e/app:/app" -w /app \
   -e INNGEST_DEV=0 -e INNGEST_BASE_URL="http://host.docker.internal:$PORT" \
   -e INNGEST_SIGNING_KEY="signkey-test-$KEY" -e INNGEST_EVENT_KEY="$EVENT_KEY" \
   -e INNGEST_SERVE_ORIGIN="http://localhost:$APP_PORT" \

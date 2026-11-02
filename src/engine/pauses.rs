@@ -4,7 +4,7 @@ use super::Engine;
 use super::execute::Outcome;
 use crate::types::*;
 use crate::util::{hash36, sha1_uuid};
-use oxidle_expr::Vars;
+use ingot_expr::Vars;
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
 use ulid::Ulid;

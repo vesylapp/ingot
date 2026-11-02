@@ -354,7 +354,7 @@ async fn create_cancellation(State(engine): State<AppState>, body: Bytes) -> Res
                 if let Some(x) = &expr {
                     let events = engine2.state.load_events(r.run_id).await.unwrap_or_default();
                     let ok = x
-                        .eval_bool(oxidle_expr::Vars {
+                        .eval_bool(ingot_expr::Vars {
                             event: events.first(),
                             async_: None,
                         })

@@ -201,7 +201,8 @@ CREATE TABLE IF NOT EXISTS batch_events (
 const MIGRATIONS: &[&str] = &[SCHEMA, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4];
 
 /// Postgres advisory lock key held while migrating, so nodes starting together take turns.
-const MIGRATION_LOCK: i64 = 0x6f78_6964_6c65_6d67; // "oxidlemg"
+// ASCII "oxidlemg" (the project's former name). Kept so nodes from before the rename share the lock.
+const MIGRATION_LOCK: i64 = 0x6f78_6964_6c65_6d67;
 
 const SCHEMA_V2: &str = r#"
 ALTER TABLE function_runs ADD COLUMN event_name TEXT;

@@ -19,7 +19,7 @@ use crate::auth::SigningKey;
 use crate::config::Config;
 use crate::store::{MetaStore, StateStore};
 use crate::types::*;
-use oxidle_expr::ExprCache;
+use ingot_expr::ExprCache;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -186,7 +186,7 @@ impl Engine {
         Ok(tracked)
     }
 
-    pub fn compile(&self, src: &str) -> Result<oxidle_expr::Expression, oxidle_expr::ExprError> {
+    pub fn compile(&self, src: &str) -> Result<ingot_expr::Expression, ingot_expr::ExprError> {
         self.exprs.get(src)
     }
 }

@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "docs" / "benchmarks"
 DOC = ROOT / "docs" / "benchmarks.md"
 
-TARGETS = ["oxidle", "inngest"]
+TARGETS = ["ingot", "inngest"]
 BACKENDS = ["sqlite", "postgres", "redis", "redis-postgres"]
 BACKEND_LABEL = {"sqlite": "SQLite", "postgres": "Postgres", "redis": "Redis", "redis-postgres": "Redis + Postgres"}
 
@@ -146,7 +146,7 @@ def tables(runs, mem, versions, labels):
         return "–" if v is None else fmt(v)
 
     def ratio(b, mode, kind, field, higher_better=True):
-        a = median(runs, "oxidle", b, mode, kind, field)
+        a = median(runs, "ingot", b, mode, kind, field)
         r = median(runs, "inngest", b, mode, kind, field)
         if not a or not r:
             return "–"
@@ -158,12 +158,12 @@ def tables(runs, mem, versions, labels):
     out = []
     out.append(f"Medians of {reps} repetitions. Throughput runs send {n:,} events in batches of 200.\n")
     out.append("### Throughput (runs/s, higher is better)\n")
-    out.append(f"| Backend | Function | {labels['oxidle']} | {labels['inngest']} | oxidle advantage |")
+    out.append(f"| Backend | Function | {labels['ingot']} | {labels['inngest']} | Ingot advantage |")
     out.append("|---|---|--:|--:|--:|")
     for b in BACKENDS:
         for kind, kl in (("one", "no steps"), ("three", "3 steps")):
             out.append(
-                f"| {BACKEND_LABEL[b]} | {kl} | {cell('oxidle', b, 'throughput', kind, 'runs_per_sec')} "
+                f"| {BACKEND_LABEL[b]} | {kl} | {cell('ingot', b, 'throughput', kind, 'runs_per_sec')} "
                 f"| {cell('inngest', b, 'throughput', kind, 'runs_per_sec')} | {ratio(b, 'throughput', kind, 'runs_per_sec')} |"
             )
     rate = next((r for r in runs if r["mode"] == "latency"), None)
@@ -205,7 +205,7 @@ def main():
     src = sys.argv[1] if len(sys.argv) > 1 else ROOT / "bench" / "results" / "matrix.jsonl"
     runs, mem, versions = load(src)
     iv = versions.get("inngest", "").split("-")[0]
-    labels = {"oxidle": f"oxidle {versions.get('oxidle', '')}".strip(), "inngest": f"Inngest {iv}".strip()}
+    labels = {"ingot": f"Ingot {versions.get('ingot', '')}".strip(), "inngest": f"Inngest {iv}".strip()}
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     def series(mode, kind, field):

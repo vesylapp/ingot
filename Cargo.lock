@@ -1549,6 +1549,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "ingot"
+version = "0.1.4"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "async-trait",
+ "axum",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "croner",
+ "dashmap",
+ "futures",
+ "hex",
+ "hmac 0.13.0",
+ "humantime",
+ "ingot-expr",
+ "parking_lot",
+ "prometheus",
+ "rand 0.10.3",
+ "redis",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sha1 0.11.0",
+ "sha2 0.11.1",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tower-http 0.7.1",
+ "tracing",
+ "tracing-subscriber",
+ "ulid",
+ "url",
+ "uuid",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "ingot-expr"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "chrono-tz",
+ "regex",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1891,61 +1946,6 @@ name = "openssl-probe"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
-
-[[package]]
-name = "oxidle"
-version = "0.1.4"
-dependencies = [
- "anyhow",
- "async-graphql",
- "async-trait",
- "axum",
- "base64 0.23.1",
- "bytes",
- "chrono",
- "chrono-tz",
- "clap",
- "croner",
- "dashmap",
- "futures",
- "hex",
- "hmac 0.13.0",
- "humantime",
- "oxidle-expr",
- "parking_lot",
- "prometheus",
- "rand 0.10.3",
- "redis",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "serde_json_canonicalizer",
- "sha1 0.11.0",
- "sha2 0.11.1",
- "sqlx",
- "thiserror",
- "tokio",
- "tower-http 0.7.1",
- "tracing",
- "tracing-subscriber",
- "ulid",
- "url",
- "uuid",
- "xxhash-rust",
-]
-
-[[package]]
-name = "oxidle-expr"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "chrono",
- "chrono-tz",
- "regex",
- "serde_json",
- "thiserror",
-]
 
 [[package]]
 name = "parking"
