@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS batch_events (
 "#;
 
 /// Schema migrations, applied in order. Never edit a released entry; append a new one.
-const MIGRATIONS: &[&str] = &[SCHEMA, SCHEMA_V2, SCHEMA_V3];
+const MIGRATIONS: &[&str] = &[SCHEMA, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4];
 
 /// Postgres advisory lock key held while migrating, so nodes starting together take turns.
 const MIGRATION_LOCK: i64 = 0x6f78_6964_6c65_6d67; // "oxidlemg"
@@ -238,6 +238,20 @@ CREATE INDEX IF NOT EXISTS concurrency_expires ON concurrency(expires_at);
 CREATE INDEX IF NOT EXISTS pauses_expires ON pauses(kind, expires_at);
 CREATE INDEX IF NOT EXISTS events_received_id ON events(received_at, internal_id);
 DROP INDEX IF EXISTS events_received
+"#;
+
+/// Dashboard indexes: run lists filtered by function or status come back in index order,
+/// event counts are index-only, and history GC skips runs that are still going.
+const SCHEMA_V4: &str = r#"
+CREATE INDEX IF NOT EXISTS function_runs_fn_started ON function_runs(fn_id, started_at, run_id);
+DROP INDEX IF EXISTS function_runs_fn;
+CREATE INDEX IF NOT EXISTS function_runs_ended_id ON function_runs(ended_at, run_id);
+DROP INDEX IF EXISTS function_runs_ended;
+CREATE INDEX IF NOT EXISTS function_runs_status ON function_runs(status, started_at, run_id);
+CREATE INDEX IF NOT EXISTS events_received_name ON events(received_at, internal_id, name);
+DROP INDEX IF EXISTS events_received_id;
+CREATE INDEX IF NOT EXISTS run_state_finished ON run_state(updated_at) WHERE status <> 'Running';
+DROP INDEX IF EXISTS run_state_updated
 "#;
 
 /// Delete the rows of `table` whose `col` is one of `ids`.
@@ -646,10 +660,10 @@ fn run_where(q: &RunQuery, with_cursor: bool) -> (String, Vec<Bind>) {
             w.clauses.push(format!("run_id < {p}"));
         }
         if let Some((t, id)) = q.page_cursor {
+            // A row comparison, unlike the equivalent OR, bounds the index range scan.
             let pt = w.p(Bind::I(t));
-            let pt2 = w.p(Bind::I(t));
             let pid = w.p(Bind::S(id.to_string()));
-            w.clauses.push(format!("({col} < {pt} OR ({col} = {pt2} AND run_id < {pid}))"));
+            w.clauses.push(format!("({col}, run_id) < ({pt}, {pid})"));
         }
     }
     w.finish()
