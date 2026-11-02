@@ -31,7 +31,7 @@ serde_json = { version = "1.0.154", features = ["preserve_order", "raw_value"] }
 serde_json_canonicalizer = "0.4.1"
 sha1 = "0.11.0"
 sha2 = "0.11.1"
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres", "json", "chrono", "any"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "sqlite", "postgres", "json", "chrono", "any"] }
 thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["full"] }
 tower-http = { version = "0.7.1", features = ["cors", "trace", "compression-gzip", "fs"] }

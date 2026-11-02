@@ -207,6 +207,11 @@ The queue gauges read the shared store, so every node reports the same value; us
 Unlike the reference server's default (in-memory Redis that is lost on restart), every
 Ingot configuration is durable. Multiple Ingot nodes can share Postgres or Redis.
 
+Postgres connections use TLS when the server offers it. Set `sslmode` in the URI to require it:
+`?sslmode=require` encrypts without checking the certificate; `verify-ca` / `verify-full`
+check it against the public web CAs, or against your own CA with `&sslrootcert=/path/ca.pem`
+(e.g. a managed database's CA bundle).
+
 ## Configuration
 
 All `inngest start` flags are accepted with the same `INNGEST_*` environment variables:
