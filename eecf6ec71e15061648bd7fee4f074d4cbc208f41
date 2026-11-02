@@ -1,0 +1,22 @@
+docs/benchmarks.md
+  s_b3b9f663377036::t_193c2950a82214 181-184,190-264
+bench/matrix.sh
+  s_b3b9f663377036::t_a5266e5e9a4271 53-62,139,142-143,145-148
+  s_b3b9f663377036::t_1a2ad48a771f1f 40-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eecf6ec71e15061648bd7fee4f074d4cbc208f41",
+  "prompts": {},
+  "sessions": {
+    "s_b3b9f663377036": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7fcb96c-2e2e-47c6-a9d7-4a20eefa4820",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}

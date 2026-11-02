@@ -1,0 +1,16 @@
+Cargo.lock
+  h_4d9554034adb05 1891
+Cargo.toml
+  h_4d9554034adb05 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76f6ef8b0745aca640543180c733e07ddfd22cbc",
+  "prompts": {},
+  "humans": {
+    "h_4d9554034adb05": {
+      "author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}

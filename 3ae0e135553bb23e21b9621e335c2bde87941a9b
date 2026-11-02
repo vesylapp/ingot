@@ -1,0 +1,30 @@
+docs/benchmarks/throughput.svg
+  s_b3b9f663377036::t_4c818c0be122f4 19,25-28,30,32-35,37-40,42-45,47-50,65-68,70-73,75-78,80-83
+docs/benchmarks/latency.svg
+  s_b3b9f663377036::t_4c818c0be122f4 19,34-37,39-42,44,46-47,49-52,56-61,63,65-68,70-73,75-78,80-83
+docs/benchmarks.md
+  s_b3b9f663377036::t_4c818c0be122f4 17,19-26,34-41,49-56
+  s_b3b9f663377036::t_f9f0edfe63e20c 136-137,157,162-163,167-168,195,203
+  s_b3b9f663377036::t_ddc41d8a265be8 218-219,223-224,228,230-231,233
+  s_b3b9f663377036::t_f64c41d200ac92 102,104,111-112
+README.md
+  s_b3b9f663377036::t_16bc3557e37391 110-113,115,118
+bench/results/matrix.jsonl
+  s_b3b9f663377036::t_4c818c0be122f4 1-6,8-39,41-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3ae0e135553bb23e21b9621e335c2bde87941a9b",
+  "prompts": {},
+  "sessions": {
+    "s_b3b9f663377036": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7fcb96c-2e2e-47c6-a9d7-4a20eefa4820",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}

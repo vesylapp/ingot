@@ -1,0 +1,53 @@
+README.md
+  s_b3b9f663377036::t_9a7fa525d22e9a 20-23
+  s_b3b9f663377036::t_e8b257b354ad0d 42-45,129-130,149
+docs/benchmarks/latency.svg
+  s_b3b9f663377036::t_d6bd0b4c0c9eb2 1-68
+bench/results/matrix.jsonl
+  s_b3b9f663377036::t_53ad831877a446 17
+  s_b3b9f663377036::t_4fbe0e398ef3a8 14-16
+  s_b3b9f663377036::t_4d1c5a0ad115cc 18-20
+bench/matrix.sh
+  s_b3b9f663377036::t_1218748fe82bcc 107-108
+  s_b3b9f663377036::t_879165532da494 9,68
+  s_b3b9f663377036::t_6296ca803922a4 95
+  s_b3b9f663377036::t_78c3dff27b9f32 1-8,10-16,19-67,69-83,85-94,96-106,109-119,121,123-128
+  s_b3b9f663377036::t_1f3b45de159939 17-18,120,122
+  s_b3b9f663377036::t_d0dbba3591add2 84
+bench/report.py
+  s_b3b9f663377036::t_cde751c9b4cf75 1-56,59,61,65-103,110,112-237
+  s_b3b9f663377036::t_d88d1884f62e05 57-58,60,62-64,104-109,111
+.dockerignore
+  s_b3b9f663377036::t_1d0d58e63d63a6 1-7
+Dockerfile
+  s_b3b9f663377036::t_1d0d58e63d63a6 1-19
+e2e/app/app.mjs
+  s_b3b9f663377036::t_fdc3a966aeed11 279-284
+  s_b3b9f663377036::t_11c518166c2cf2 17,20-26,252-253,257,261,276
+docs/benchmarks/throughput.svg
+  s_b3b9f663377036::t_d6bd0b4c0c9eb2 1-68
+e2e/app/bench.mjs
+  s_b3b9f663377036::t_fdc3a966aeed11 1-5,9,11-14,25-44,48,51,54-69
+docs/benchmarks.md
+  s_b3b9f663377036::t_be7b458dc1cff4 1-99
+bench/results/matrix-oxidle-postgres.log
+  s_b3b9f663377036::t_587262bac6332d 1
+bench/results/matrix-oxidle-sqlite.log
+  s_b3b9f663377036::t_3e30fde0cb64f0 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "51e3aa332aad82d424078b052e57504efc8e095d",
+  "prompts": {},
+  "sessions": {
+    "s_b3b9f663377036": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7fcb96c-2e2e-47c6-a9d7-4a20eefa4820",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}

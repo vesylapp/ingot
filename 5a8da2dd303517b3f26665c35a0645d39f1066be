@@ -1,0 +1,22 @@
+src/store/sql.rs
+  s_b3b9f663377036::t_f60b34d1b1fb10 201,243-256,663,666
+tests/run_queries.rs
+  s_b3b9f663377036::t_589ba2dd126068 1-95,99-103,105-132
+  s_b3b9f663377036::t_6a649f98dbcccf 96-98,104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5a8da2dd303517b3f26665c35a0645d39f1066be",
+  "prompts": {},
+  "sessions": {
+    "s_b3b9f663377036": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7fcb96c-2e2e-47c6-a9d7-4a20eefa4820",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}

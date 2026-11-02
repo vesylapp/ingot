@@ -1,0 +1,33 @@
+docs/benchmarks/latency.svg
+  s_b3b9f663377036::t_26a701b2edbc93 1,15,23-81
+bench/report.py
+  s_b3b9f663377036::t_589dea4fb5e8fc 20-21,84
+README.md
+  s_b3b9f663377036::t_b045f69a25de34 52,54-57
+bench/matrix.sh
+  s_b3b9f663377036::t_3cf9b3b79dd2ef 10-12,37,91-97,100,103
+docs/benchmarks/throughput.svg
+  s_b3b9f663377036::t_26a701b2edbc93 1,15,23-87
+bench/results/matrix.jsonl
+  s_b3b9f663377036::t_26a701b2edbc93 61-82
+docs/benchmarks.md
+  s_b3b9f663377036::t_8a55b825a5b247 91,94-96,111-142
+  s_b3b9f663377036::t_26a701b2edbc93 25-26,40-41,55-56
+  s_b3b9f663377036::t_b045f69a25de34 156,166-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9bab36b2020754650099e9a3fec066af63cd1348",
+  "prompts": {},
+  "sessions": {
+    "s_b3b9f663377036": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7fcb96c-2e2e-47c6-a9d7-4a20eefa4820",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}
