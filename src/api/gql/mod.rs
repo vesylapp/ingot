@@ -5,6 +5,7 @@ mod types;
 
 use crate::engine::Engine;
 use crate::store::{EventQuery as StoreEventQuery, RunQuery, RunTimeField};
+use crate::store::search::{PAGE_SCAN_LIMIT, RunSearch};
 use crate::types as t;
 use async_graphql::{Context, EmptySubscription, ID, Object, Result, Schema, SimpleObject};
 use axum::body::Bytes as BodyBytes;
@@ -50,6 +51,13 @@ fn engine<'a>(ctx: &Context<'a>) -> &'a Arc<Engine> {
 
 fn err(e: anyhow::Error) -> async_graphql::Error {
     async_graphql::Error::new(e.to_string())
+}
+
+/// A search expression that does not compile. The dashboard shows errors with this code under
+/// the search box.
+fn invalid_expression(msg: &str) -> async_graphql::Error {
+    use async_graphql::ErrorExtensions;
+    async_graphql::Error::new(msg).extend_with(|_, e| e.set("code", "expression_invalid"))
 }
 
 fn parse_ulid(s: &str) -> Result<ulid::Ulid> {
@@ -447,6 +455,7 @@ pub struct RunsV2Connection {
     edges: Vec<FunctionRunV2Edge>,
     page_info: PageInfo,
     query: RunQuery,
+    search: Option<RunSearch>,
 }
 
 #[Object]
@@ -458,7 +467,12 @@ impl RunsV2Connection {
         &self.page_info
     }
     async fn total_count(&self, ctx: &Context<'_>) -> Result<i32> {
-        Ok(engine(ctx).meta.count_runs(&self.query).await.map_err(err)? as i32)
+        let meta = &*engine(ctx).meta;
+        let n = match &self.search {
+            Some(s) => s.count(meta, &self.query).await,
+            None => meta.count_runs(&self.query).await,
+        };
+        Ok(n.map_err(err)? as i32)
     }
 }
 
@@ -849,10 +863,23 @@ impl Query {
             limit: first + 1,
             ..Default::default()
         };
+        let search = match filter.query.as_deref().map(RunSearch::parse).transpose() {
+            Ok(s) => s.flatten(),
+            Err(e) => return Err(invalid_expression(&e.0)),
+        };
         let mut page_query = query.clone();
         page_query.page_cursor = after.as_deref().and_then(decode_run_cursor);
-        let mut runs = engine(ctx).meta.list_runs(&page_query).await.map_err(err)?;
-        let has_next = runs.len() as i64 > first;
+        let meta = &*engine(ctx).meta;
+        let (mut runs, resume) = match &search {
+            Some(s) => {
+                let page = s.list(meta, &page_query, PAGE_SCAN_LIMIT).await.map_err(err)?;
+                (page.runs, page.resume)
+            }
+            None => (meta.list_runs(&page_query).await.map_err(err)?, None),
+        };
+        // A search that hit its scan limit returns what it found so far and continues from
+        // where it stopped reading on the next page.
+        let has_next = resume.is_some() || runs.len() as i64 > first;
         runs.truncate(first as usize);
         let edges: Vec<FunctionRunV2Edge> = runs
             .into_iter()
@@ -861,15 +888,20 @@ impl Query {
                 node: FunctionRunV2(r),
             })
             .collect();
+        let end_cursor = match resume {
+            Some((t, id)) => Some(format!("{t}:{id}")),
+            None => edges.last().map(|e| e.cursor.clone()),
+        };
         Ok(RunsV2Connection {
             page_info: PageInfo {
                 has_next_page: has_next,
                 has_previous_page: after.is_some(),
                 start_cursor: edges.first().map(|e| e.cursor.clone()),
-                end_cursor: edges.last().map(|e| e.cursor.clone()),
+                end_cursor,
             },
             edges,
             query,
+            search,
         })
     }
 

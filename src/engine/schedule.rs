@@ -44,6 +44,7 @@ impl Engine {
         Vars {
             event: events.first(),
             async_: None,
+            ..Default::default()
         }
     }
 

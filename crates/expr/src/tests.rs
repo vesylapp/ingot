@@ -12,7 +12,7 @@ fn ev(data: Json) -> Json {
 }
 
 fn run_with(src: &str, event: Option<&Json>, async_: Option<&Json>) -> Result<Json, ExprError> {
-    Expression::compile(src)?.eval(Vars { event, async_ })
+    Expression::compile(src)?.eval(Vars { event, async_, ..Default::default() })
 }
 
 /// Evaluates with `event.data = data`.
@@ -28,6 +28,7 @@ fn bool_data(src: &str, data: Json) -> bool {
         .eval_bool(Vars {
             event: Some(&e),
             async_: None,
+            ..Default::default()
         })
         .unwrap_or_else(|err| panic!("{src}: {err}"))
 }
@@ -47,6 +48,7 @@ fn key(src: &str, data: Json) -> String {
         .eval_key(Vars {
             event: Some(&e),
             async_: None,
+            ..Default::default()
         })
         .unwrap_or_else(|err| panic!("{src}: {err}"))
 }
@@ -57,6 +59,7 @@ fn go_repr(e: &Expression, data: &Json) -> (String, String, bool) {
     let vars = Vars {
         event: data.get("event"),
         async_: data.get("async"),
+        ..Default::default()
     };
     let v = e.run(vars);
     let (t, s) = match &v {
@@ -159,6 +162,7 @@ fn typical_trigger_and_wait_expressions() {
     let vars = Vars {
         event: Some(&event),
         async_: Some(&asyn),
+        ..Default::default()
     };
     let t = |s: &str| Expression::compile(s).unwrap().eval_bool(vars).unwrap();
     assert!(t("event.data.userId == async.data.userId"));
@@ -175,6 +179,7 @@ fn typical_trigger_and_wait_expressions() {
     let only_event = Vars {
         event: Some(&event),
         async_: None,
+        ..Default::default()
     };
     let e = Expression::compile("event.data.userId == async.data.userId").unwrap();
     assert!(!e.eval_bool(only_event).unwrap());
@@ -389,6 +394,7 @@ fn negated_presence() {
             .eval_bool(Vars {
                 event: Some(&e),
                 async_: None,
+                ..Default::default()
             })
             .unwrap_or_else(|err| panic!("{src}: {err}"));
         assert_eq!(got, *want, "{src} with {data}");
@@ -691,6 +697,7 @@ fn eval_bool_contexts() {
     let vars = Vars {
         event: Some(&e),
         async_: None,
+        ..Default::default()
     };
     let b = |s: &str| Expression::compile(s).unwrap().eval_bool(vars);
     assert!(b("event.data.s == 'x'").unwrap());
@@ -745,6 +752,7 @@ fn key_formatting() {
     let vars = Vars {
         event: Some(&e),
         async_: None,
+        ..Default::default()
     };
     let opt = |s: &str| Expression::compile(s).unwrap().eval_key_opt(vars).unwrap();
     assert_eq!(opt("event.data.userId"), Some("u-1".to_string()));
@@ -762,6 +770,7 @@ fn eval_int_for_priority() {
     let vars = Vars {
         event: Some(&e),
         async_: None,
+        ..Default::default()
     };
     let i = |s: &str| Expression::compile(s).unwrap().eval_int(vars);
     assert_eq!(i("event.data.p").unwrap(), 10);
@@ -961,6 +970,7 @@ fn concurrent_evaluation() {
                         .eval(Vars {
                             event: Some(&event),
                             async_: None,
+                            ..Default::default()
                         })
                         .unwrap();
                     assert_eq!(got, json!(format!("tag-{i}")));
@@ -1051,6 +1061,7 @@ fn fuzz_no_panics() {
             let vars = Vars {
                 event: d.get("event"),
                 async_: d.get("async"),
+                ..Default::default()
             };
             let _ = e.eval(vars);
             let _ = e.eval_bool(vars);
@@ -1108,6 +1119,7 @@ fn weird_inputs() {
         let vars = Vars {
             event: Some(&event),
             async_: Some(&event),
+            ..Default::default()
         };
         for src in [
             "event.data.x == 1",
@@ -1128,6 +1140,7 @@ fn weird_inputs() {
     let vars = Vars {
         event: Some(&huge),
         async_: None,
+        ..Default::default()
     };
     for src in [
         "event.data.n * event.data.n",
@@ -1183,4 +1196,81 @@ fn go_float_formatting() {
     for (f, want) in cases {
         assert_eq!(go_float(*f), *want, "{f}");
     }
+}
+
+#[test]
+fn run_search_roots_are_opt_in() {
+    // Trigger expressions keep rejecting the run-only variables.
+    assert!(matches!(Expression::compile("output.ok == true"), Err(ExprError::Compile(_))));
+    assert!(matches!(Expression::compile("error.message == 'x'"), Err(ExprError::Compile(_))));
+
+    let event = ev(json!({"id": 7}));
+    let output = json!({"ok": true, "items": [1, 2]});
+    let error = json!({"name": "Error", "message": "timed out"});
+    let vars = Vars {
+        event: Some(&event),
+        output: Some(&output),
+        error: Some(&error),
+        ..Default::default()
+    };
+    let t = |src: &str| Expression::compile_run_search(src).unwrap().eval_bool(vars).unwrap();
+    assert!(t("output.ok == true && size(output.items) == 2"));
+    assert!(t("event.data.id == 7 && error.message.contains('timed')"));
+    assert!(!t("output.ok == false"));
+
+    // Absent run values behave like missing attributes: no match rather than an error.
+    let only_event = Vars {
+        event: Some(&event),
+        ..Default::default()
+    };
+    let e = Expression::compile_run_search("output.ok == true").unwrap();
+    assert!(!e.eval_bool(only_event).unwrap_or(false));
+    // A comprehension variable named `output` still shadows nothing in trigger expressions.
+    assert!(
+        Expression::compile("[1].exists(output, output == 1)")
+            .unwrap()
+            .eval_bool(only_event)
+            .unwrap()
+    );
+}
+
+#[test]
+fn event_names_constraint() {
+    let names = |src: &str| {
+        Expression::compile_run_search(src)
+            .unwrap()
+            .event_names()
+            .map(|n| (n.names, n.exact))
+    };
+    let v = |xs: &[&str]| xs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+    assert_eq!(names(r#"event.name == "a""#), Some((v(&["a"]), true)));
+    assert_eq!(names(r#""a" == event.name"#), Some((v(&["a"]), true)));
+    assert_eq!(names(r#"event["name"] == "a""#), Some((v(&["a"]), true)));
+    assert_eq!(names(r#"event.name in ["b", "a", "b"]"#), Some((v(&["a", "b"]), true)));
+    assert_eq!(
+        names(r#"event.name == "a" || event.name == "b""#),
+        Some((v(&["a", "b"]), true))
+    );
+    assert_eq!(
+        names(r#"event.name in ["a", "b"] && event.name == "b""#),
+        Some((v(&["b"]), true))
+    );
+    assert_eq!(names(r#"event.name == "a" && event.name == "b""#), Some((vec![], true)));
+    // Other conditions still narrow by name but need evaluating.
+    assert_eq!(
+        names(r#"event.name == "a" && event.data.id == 1"#),
+        Some((v(&["a"]), false))
+    );
+    assert_eq!(
+        names(r#"output.ok == true && (event.name == "a" || event.name == "b")"#),
+        Some((v(&["a", "b"]), false))
+    );
+    // Nothing that pins the name down.
+    assert_eq!(names(r#"event.name == "a" || event.data.id == 1"#), None);
+    assert_eq!(names(r#"event.name != "a""#), None);
+    assert_eq!(names(r#"event.name.startsWith("a")"#), None);
+    assert_eq!(names(r#"event.data.name == "a""#), None);
+    assert_eq!(names(r#"event.name in ["a", event.data.x]"#), None);
+    assert_eq!(names(r#"!(event.name == "a")"#), None);
 }

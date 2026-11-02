@@ -70,11 +70,24 @@ pub enum ExprError {
 }
 
 /// Variables bound during evaluation. `event` and `async` are JSON objects (Inngest event maps:
-/// {name,data,user,id,ts,v?}); either may be absent.
+/// {name,data,user,id,ts,v?}); `output` and `error` are a run's result and are only visible to
+/// expressions compiled with [`Expression::compile_run_search`]. Any of them may be absent.
 #[derive(Default, Clone, Copy)]
 pub struct Vars<'a> {
     pub event: Option<&'a Json>,
     pub async_: Option<&'a Json>,
+    pub output: Option<&'a Json>,
+    pub error: Option<&'a Json>,
+}
+
+/// Trigger event names an expression can match; see [`Expression::event_names`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventNames {
+    /// Sorted, deduplicated. Empty when no event name can satisfy the expression.
+    pub names: Vec<String>,
+    /// True when the expression is nothing but this check, so `event.name` being in `names`
+    /// gives the same answer as evaluating it.
+    pub exact: bool,
 }
 
 struct Inner {
@@ -102,8 +115,18 @@ impl Expression {
     /// undeclared identifiers (only `event`, `async` and `vars` are declared),
     /// and unknown functions / wrong arities.
     pub fn compile(src: &str) -> Result<Expression, ExprError> {
+        Self::compile_inner(src, false)
+    }
+
+    /// Like [`Expression::compile`], for searching run history: `output` (the run's output)
+    /// and `error` (a failed run's error) are declared as well.
+    pub fn compile_run_search(src: &str) -> Result<Expression, ExprError> {
+        Self::compile_inner(src, true)
+    }
+
+    fn compile_inner(src: &str, run_roots: bool) -> Result<Expression, ExprError> {
         let parsed = parser::parse(src).map_err(ExprError::Compile)?;
-        let program = compile::compile(&parsed).map_err(ExprError::Compile)?;
+        let program = compile::compile(&parsed, run_roots).map_err(ExprError::Compile)?;
         let references_event = compile::references_root(&program.root, Root::Event);
         Ok(Expression {
             inner: Arc::new(Inner {
@@ -131,7 +154,7 @@ impl Expression {
     }
 
     fn run<'s>(&'s self, vars: Vars<'s>) -> Val<'s> {
-        Evaluator::new(&self.inner.program, vars.event, vars.async_).run()
+        Evaluator::new(&self.inner.program, vars).run()
     }
 
     /// Evaluate and convert the result to JSON (timestamps -> RFC3339 strings, durations ->
@@ -195,6 +218,16 @@ impl Expression {
     /// True if the expression references the `event` variable anywhere.
     pub fn references_event(&self) -> bool {
         self.inner.references_event
+    }
+
+    /// If the expression can only be true when `event.name` is one of a fixed set of strings
+    /// (`event.name == "a"`, `event.name in ["a", "b"]`, combined with `&&`/`||`), returns that
+    /// set. Lets callers narrow candidates by name before evaluating.
+    pub fn event_names(&self) -> Option<EventNames> {
+        compile::event_name_set(&self.inner.program.root).map(|s| EventNames {
+            names: s.names.into_iter().collect(),
+            exact: s.exact,
+        })
     }
 }
 

@@ -289,3 +289,37 @@ async fn runs_list_and_function_config() {
     assert_eq!(func["configuration"]["retries"]["isDefault"], true);
     assert_eq!(func["app"]["method"], "SERVE");
 }
+
+#[tokio::test]
+async fn runs_search_query() {
+    let f = fixture().await;
+    let search = |cel: &str| {
+        format!(
+            r#"{{ runs(first: 10, orderBy: [{{field: QUEUED_AT, direction: DESC}}], filter: {{from: "2020-01-01T00:00:00Z", query: {}}}) {{
+                  totalCount edges {{ node {{ id }} }} pageInfo {{ hasNextPage }} }} }}"#,
+            serde_json::to_string(cel).unwrap()
+        )
+    };
+    for (cel, n) in [
+        (r#"event.name == "app/go""#, 1),
+        (r#"event.name == "app/other""#, 0),
+        ("output.ok == true", 1),
+        ("event.name == \"app/go\"\noutput.ok == false", 0),
+        ("", 1),
+    ] {
+        let v = query(&f, &search(cel)).await;
+        assert_eq!(v["runs"]["totalCount"], n, "{cel}");
+        assert_eq!(v["runs"]["edges"].as_array().unwrap().len(), n as usize, "{cel}");
+        assert_eq!(v["runs"]["pageInfo"]["hasNextPage"], false, "{cel}");
+        if n == 1 {
+            assert_eq!(v["runs"]["edges"][0]["node"]["id"], f.run_id.to_string());
+        }
+    }
+
+    // The dashboard shows errors with this code under the search box.
+    let resp = f.schema.execute(search("event.name ==")).await;
+    let e = resp.errors.first().expect("an error");
+    assert!(e.message.ends_with("\n | event.name =="), "{}", e.message);
+    let ext = serde_json::to_value(&e.extensions).unwrap();
+    assert_eq!(ext["code"], "expression_invalid");
+}

@@ -39,6 +39,7 @@ impl Engine {
                 let vars = Vars {
                     event: p.trigger_event.as_ref(),
                     async_: Some(evt_json),
+                    ..Default::default()
                 };
                 match self.compile(expr).and_then(|x| x.eval_bool(vars)) {
                     Ok(true) => {}

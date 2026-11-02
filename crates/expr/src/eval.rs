@@ -17,13 +17,13 @@ use serde_json::Value as Json;
 use crate::compile::{
     Attr, Base, Comp, CompKind, Const, Func, Node, Program, Qual, Root, compile_regex,
 };
+use crate::Vars;
 use crate::timefmt;
 use crate::value::{Bytes, Kind, List, MapV, Str, Val, cel_cmp, cel_eq, go_float};
 
 pub(crate) struct Evaluator<'a> {
     prog: &'a Program,
-    event: Option<&'a Json>,
-    async_: Option<&'a Json>,
+    vars: Vars<'a>,
     /// Lazily computed: for each pattern, whether its path is absent from the input.
     missing: Option<Vec<bool>>,
     locals: Vec<Val<'a>>,
@@ -168,11 +168,10 @@ fn qualify<'a>(obj: Val<'a>, key: &Val<'a>) -> Val<'a> {
 }
 
 impl<'a> Evaluator<'a> {
-    pub(crate) fn new(prog: &'a Program, event: Option<&'a Json>, async_: Option<&'a Json>) -> Self {
+    pub(crate) fn new(prog: &'a Program, vars: Vars<'a>) -> Self {
         Evaluator {
             prog,
-            event,
-            async_,
+            vars,
             missing: None,
             locals: Vec::new(),
             no_unknowns: 0,
@@ -270,12 +269,18 @@ impl<'a> Evaluator<'a> {
 
     // -- attributes ---------------------------------------------------------
 
-    fn root_val(&self, r: Root, quals: &[Qual]) -> Val<'a> {
-        let v = match r {
-            Root::Event => self.event,
-            Root::Async => self.async_,
+    fn root(&self, r: Root) -> Option<&'a Json> {
+        match r {
+            Root::Event => self.vars.event,
+            Root::Async => self.vars.async_,
             Root::Vars => None,
-        };
+            Root::Output => self.vars.output,
+            Root::Error => self.vars.error,
+        }
+    }
+
+    fn root_val(&self, r: Root, quals: &[Qual]) -> Val<'a> {
+        let v = self.root(r);
         match v {
             Some(j) => Val::from_json(j),
             None => {
@@ -298,12 +303,7 @@ impl<'a> Evaluator<'a> {
                 .patterns
                 .iter()
                 .map(|p| {
-                    let root = match p.root {
-                        Root::Event => self.event,
-                        Root::Async => self.async_,
-                        Root::Vars => None,
-                    };
-                    !path_exists(root, &p.path)
+                    !path_exists(self.root(p.root), &p.path)
                 })
                 .collect();
             self.missing = Some(m);

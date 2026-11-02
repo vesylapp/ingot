@@ -14,14 +14,21 @@ pub(crate) enum Root {
     Event,
     Async,
     Vars,
+    /// A finished run's output (run search only).
+    Output,
+    /// A failed run's error (run search only).
+    Error,
 }
 
 impl Root {
-    fn from_name(s: &str) -> Option<Root> {
+    /// Resolves a root variable. `output` and `error` are only declared when `run_roots` is set.
+    fn from_name(s: &str, run_roots: bool) -> Option<Root> {
         match s {
             "event" => Some(Root::Event),
             "async" => Some(Root::Async),
             "vars" => Some(Root::Vars),
+            "output" if run_roots => Some(Root::Output),
+            "error" if run_roots => Some(Root::Error),
             _ => None,
         }
     }
@@ -31,6 +38,8 @@ impl Root {
             Root::Event => "event",
             Root::Async => "async",
             Root::Vars => "vars",
+            Root::Output => "output",
+            Root::Error => "error",
         }
     }
 }
@@ -247,13 +256,14 @@ pub(crate) struct Program {
     pub regexes: Vec<Result<Regex, String>>,
 }
 
-pub(crate) fn compile(p: &PExpr) -> Result<Program, String> {
+pub(crate) fn compile(p: &PExpr, run_roots: bool) -> Result<Program, String> {
     let mut l = Lowerer {
         scope: Vec::new(),
         regexes: Vec::new(),
+        run_roots,
     };
     let root = l.lower(p)?;
-    let patterns = collect_patterns(p);
+    let patterns = collect_patterns(p, run_roots);
     Ok(Program {
         root,
         patterns,
@@ -264,6 +274,7 @@ pub(crate) fn compile(p: &PExpr) -> Result<Program, String> {
 struct Lowerer {
     scope: Vec<String>,
     regexes: Vec<Result<Regex, String>>,
+    run_roots: bool,
 }
 
 fn lit_const(l: &Lit) -> Const {
@@ -350,7 +361,7 @@ impl Lowerer {
                 quals: Vec::new(),
             })));
         }
-        if let Some(root) = Root::from_name(name) {
+        if let Some(root) = Root::from_name(name, self.run_roots) {
             return Ok(Node::Attr(Box::new(Attr {
                 base: Base::Root(root),
                 quals: Vec::new(),
@@ -572,7 +583,7 @@ fn push_qual(base: Node, q: Qual) -> Node {
 /// arguments (not member-call targets), comprehension ranges and select chains,
 /// collecting `root.a.b` paths. At evaluation time, those that are absent from
 /// the input make matching attributes evaluate to "unknown".
-fn collect_patterns(p: &PExpr) -> Vec<Pattern> {
+fn collect_patterns(p: &PExpr, run_roots: bool) -> Vec<Pattern> {
     let mut out = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
     let mut stack: Vec<&PExpr> = vec![p];
@@ -585,7 +596,7 @@ fn collect_patterns(p: &PExpr) -> Vec<Pattern> {
                     }
                 } else if name == "has" && target.is_none() && args.len() == 1 {
                     // has() is a test-only select in cel-go's AST.
-                    add_select_path(&args[0], &mut out, &mut seen);
+                    add_select_path(&args[0], &mut out, &mut seen, run_roots);
                 } else {
                     stack.extend(args.iter());
                 }
@@ -595,14 +606,14 @@ fn collect_patterns(p: &PExpr) -> Vec<Pattern> {
                 stack.push(operand);
                 stack.push(index);
             }
-            PKind::Select(..) => add_select_path(e, &mut out, &mut seen),
+            PKind::Select(..) => add_select_path(e, &mut out, &mut seen, run_roots),
             _ => {}
         }
     }
     out
 }
 
-fn add_select_path(e: &PExpr, out: &mut Vec<Pattern>, seen: &mut HashSet<String>) {
+fn add_select_path(e: &PExpr, out: &mut Vec<Pattern>, seen: &mut HashSet<String>, run_roots: bool) {
     let mut path: Vec<String> = Vec::new();
     let mut cur = e;
     while let PKind::Select(operand, field) = &cur.kind {
@@ -629,7 +640,7 @@ fn add_select_path(e: &PExpr, out: &mut Vec<Pattern>, seen: &mut HashSet<String>
     if path.len() < 2 {
         return;
     }
-    let Some(root) = Root::from_name(&path[0]) else {
+    let Some(root) = Root::from_name(&path[0], run_roots) else {
         return;
     };
     let key = path.join("\u{0}");
@@ -723,4 +734,76 @@ fn attr_references(a: &Attr, root: Root) -> bool {
         Base::Expr(e) => references_root(e, root),
     };
     base || a.quals.iter().any(|q| matches!(q, Qual::Dyn(e) if references_root(e, root)))
+}
+
+/// The trigger event names an expression can match, as worked out by [`event_name_set`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NameSet {
+    pub names: std::collections::BTreeSet<String>,
+    /// The expression is true exactly when `event.name` is in `names`.
+    pub exact: bool,
+}
+
+/// If evaluating `n` to `true` requires `event.name` to equal one of a finite set of string
+/// literals, returns that set. Recognizes `event.name == "x"` (either side), `event.name in
+/// ["x", ...]`, and `&&`/`||` over those. `exact` is set when nothing else is involved, so
+/// checking the name alone gives the same answer as evaluating the expression.
+pub(crate) fn event_name_set(n: &Node) -> Option<NameSet> {
+    match n {
+        Node::Call(Func::Eq, args) if args.len() == 2 => {
+            let lit = match (&args[0], &args[1]) {
+                (a, Node::Const(Const::Str(s))) | (Node::Const(Const::Str(s)), a) if is_event_name(a) => s,
+                _ => return None,
+            };
+            Some(NameSet {
+                names: [lit.to_string()].into(),
+                exact: true,
+            })
+        }
+        Node::Call(Func::In, args) if args.len() == 2 && is_event_name(&args[0]) => {
+            let Node::List(items) = &args[1] else {
+                return None;
+            };
+            let names = items
+                .iter()
+                .map(|i| match i {
+                    Node::Const(Const::Str(s)) => Some(s.to_string()),
+                    _ => None,
+                })
+                .collect::<Option<_>>()?;
+            Some(NameSet { names, exact: true })
+        }
+        // A true `a && b` needs both sides true; a true `a || b` needs one of them true.
+        Node::And(a, b) => match (event_name_set(a), event_name_set(b)) {
+            (Some(x), Some(y)) => Some(NameSet {
+                names: x.names.intersection(&y.names).cloned().collect(),
+                exact: x.exact && y.exact,
+            }),
+            (Some(x), None) | (None, Some(x)) => Some(NameSet {
+                names: x.names,
+                exact: false,
+            }),
+            (None, None) => None,
+        },
+        Node::Or(a, b) => {
+            let (x, y) = (event_name_set(a)?, event_name_set(b)?);
+            Some(NameSet {
+                names: x.names.union(&y.names).cloned().collect(),
+                exact: x.exact && y.exact,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// `event.name` or `event["name"]`.
+fn is_event_name(n: &Node) -> bool {
+    let Node::Attr(a) = n else { return false };
+    matches!(a.base, Base::Root(Root::Event))
+        && a.quals.len() == 1
+        && match &a.quals[0] {
+            Qual::Field(f) => &**f == "name",
+            Qual::Const(Const::Str(s)) => &**s == "name",
+            _ => false,
+        }
 }

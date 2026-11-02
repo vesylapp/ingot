@@ -28,6 +28,20 @@ find "$WORK/ui" -name package.json -not -path "*/node_modules/*" -exec bun -e '
   }
 ' {} \;
 
+# Runs search is answered by ingot without a result cap, but the runs page disables the
+# search button once a time range holds 1000+ runs unless the "duckdb-insights" flag is on
+# (which also shows pages ingot does not serve). Drop the cap. Fails if upstream changes it.
+bun -e '
+  const f = process.argv[1];
+  const from = "searchLimit={duckdbInsightsEnabled ? undefined : 1000}";
+  const src = await Bun.file(f).text();
+  if (!src.includes(from)) {
+    console.error(`build-ui.sh: "${from}" not found in ${f}; update this patch for the new INNGEST_REF`);
+    process.exit(1);
+  }
+  await Bun.write(f, src.replace(from, "searchLimit={undefined}"));
+' "$WORK/ui/apps/dev-server-ui/src/routes/_dashboard/runs/index.tsx"
+
 cd "$WORK/ui"
 bun install
 cd apps/dev-server-ui

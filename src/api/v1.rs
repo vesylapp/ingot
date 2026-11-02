@@ -357,6 +357,7 @@ async fn create_cancellation(State(engine): State<AppState>, body: Bytes) -> Res
                         .eval_bool(ingot_expr::Vars {
                             event: events.first(),
                             async_: None,
+                            ..Default::default()
                         })
                         .unwrap_or(false);
                     if !ok {

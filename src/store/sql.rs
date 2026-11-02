@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS batch_events (
 "#;
 
 /// Schema migrations, applied in order. Never edit a released entry; append a new one.
-const MIGRATIONS: &[&str] = &[SCHEMA, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4];
+const MIGRATIONS: &[&str] = &[SCHEMA, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5];
 
 /// Postgres advisory lock key held while migrating, so nodes starting together take turns.
 // ASCII "oxidlemg" (the project's former name). Kept so nodes from before the rename share the lock.
@@ -253,6 +253,11 @@ CREATE INDEX IF NOT EXISTS events_received_name ON events(received_at, internal_
 DROP INDEX IF EXISTS events_received_id;
 CREATE INDEX IF NOT EXISTS run_state_finished ON run_state(updated_at) WHERE status <> 'Running';
 DROP INDEX IF EXISTS run_state_updated
+"#;
+
+/// Dashboard run search: `event.name == "..."` queries page through runs in index order.
+const SCHEMA_V5: &str = r#"
+CREATE INDEX IF NOT EXISTS function_runs_event_name ON function_runs(event_name, started_at, run_id)
 "#;
 
 /// Delete the rows of `table` whose `col` is one of `ids`.
@@ -624,6 +629,14 @@ fn run_where(q: &RunQuery, with_cursor: bool) -> (String, Vec<Bind>) {
         let ps: Vec<String> = q.app_ids.iter().map(|a| w.p(Bind::S(a.to_string()))).collect();
         w.clauses.push(format!("app_id IN ({})", ps.join(", ")));
     }
+    match &q.event_names {
+        None => {}
+        Some(names) if names.is_empty() => w.clauses.push("1=0".into()),
+        Some(names) => {
+            let ps: Vec<String> = names.iter().map(|n| w.p(Bind::S(n.clone()))).collect();
+            w.clauses.push(format!("event_name IN ({})", ps.join(", ")));
+        }
+    }
     if !q.ui_statuses.is_empty() {
         let mut ors = Vec::new();
         for st in &q.ui_statuses {
@@ -863,6 +876,23 @@ impl MetaStore for SqlStore {
             .fetch_optional(&self.pool)
             .await?;
         row.as_ref().map(row_event).transpose()
+    }
+
+    async fn get_events(&self, internal_ids: &[Ulid]) -> Result<Vec<TrackedEvent>> {
+        let mut out = Vec::with_capacity(internal_ids.len());
+        // Stay well under SQLite's bound-parameter limit.
+        for chunk in internal_ids.chunks(500) {
+            let ps: Vec<String> = (1..=chunk.len()).map(|i| format!("${i}")).collect();
+            let sql = format!("SELECT * FROM events WHERE internal_id IN ({})", ps.join(", "));
+            let mut q = sqlx::query(&sql);
+            for id in chunk {
+                q = q.bind(ulid_s(*id));
+            }
+            for row in q.fetch_all(&self.pool).await? {
+                out.push(row_event(&row)?);
+            }
+        }
+        Ok(out)
     }
 
     async fn list_events(&self, q: &EventQuery) -> Result<Vec<TrackedEvent>> {

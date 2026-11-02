@@ -6,6 +6,7 @@
 //!   flow-control bookkeeping. Implemented on SQL (default) or Redis.
 
 pub mod redis;
+pub mod search;
 pub mod sql;
 
 use crate::types::*;
@@ -37,6 +38,8 @@ pub struct RunQuery {
     pub limit: i64,
     // Dashboard filters.
     pub app_ids: Vec<Uuid>,
+    /// Only runs whose trigger event has one of these names (`Some(vec![])` matches nothing).
+    pub event_names: Option<Vec<String>>,
     /// Dashboard statuses: COMPLETED, FAILED, CANCELLED, SKIPPED, RUNNING, QUEUED.
     pub ui_statuses: Vec<String>,
     pub time_field: RunTimeField,
@@ -93,6 +96,8 @@ pub trait MetaStore: Send + Sync {
 
     async fn insert_events(&self, events: &[TrackedEvent]) -> Result<()>;
     async fn get_event(&self, internal_id: Ulid) -> Result<Option<TrackedEvent>>;
+    /// The events with these internal IDs that exist, in no particular order.
+    async fn get_events(&self, internal_ids: &[Ulid]) -> Result<Vec<TrackedEvent>>;
     async fn list_events(&self, q: &EventQuery) -> Result<Vec<TrackedEvent>>;
 
     async fn insert_run(&self, run: &RunRecord) -> Result<()>;

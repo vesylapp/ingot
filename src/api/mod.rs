@@ -143,7 +143,7 @@ async fn not_found() -> Response {
 }
 
 async fn dev_info(State(engine): State<AppState>) -> Response {
-    let features = json!({ "FEATURE_EVENTS": true, "FEATURE_CEL_SEARCH": false });
+    let features = json!({ "FEATURE_EVENTS": true, "FEATURE_CEL_SEARCH": true });
     if !engine.cfg.dev {
         // Self-hosted: only what the dashboard needs (no function configs or options).
         return json_response(

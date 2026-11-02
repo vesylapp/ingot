@@ -134,6 +134,21 @@ To run the binary outside Docker with the dashboard, build it once (uses bun ins
 ```
 
 Then open `http://localhost:8288`. `--no-ui` disables both the UI and `/v0/gql`.
+
+The runs page search takes CEL, one expression per line, all of which must match. The
+expressions can use `event` (the run's trigger event), `output` (a finished run's output) and
+`error` (a failed run's error):
+
+```
+event.name == "app/process-automations"
+event.data.accountId == "acct_123" && output.processed > 0
+```
+
+`event.name == "..."` and `event.name in [...]` are answered by an indexed SQL query, so they
+stay fast over any time range. Other conditions are checked run by run: a page reads at most
+20,000 runs before returning what it has found, and the next page carries on from there. The
+build applies one change to Inngest's UI so search stays available past 1,000 runs (upstream
+only allows that with its DuckDB backend); see `ui/build-ui.sh`.
 As in the reference server, `/v0/gql` is unauthenticated — keep the port on a trusted network.
 
 Not backed by data yet: Insights (SQL), Sessions, Connect worker lists. The UI's "Send event"

@@ -88,7 +88,7 @@ impl Engine {
             if let Some(expr) = t.expression.as_deref().filter(|e| !e.is_empty()) {
                 let ok = self
                     .compile(expr)
-                    .and_then(|x| x.eval_bool(Vars { event: Some(evt_json), async_: None }));
+                    .and_then(|x| x.eval_bool(Vars { event: Some(evt_json), async_: None, ..Default::default() }));
                 match ok {
                     Ok(true) => {}
                     Ok(false) => continue,
@@ -115,7 +115,7 @@ impl Engine {
             let eligible = match b.if_expr.as_deref() {
                 Some(expr) => self
                     .compile(expr)
-                    .and_then(|x| x.eval_bool(Vars { event: Some(evt_json), async_: None }))
+                    .and_then(|x| x.eval_bool(Vars { event: Some(evt_json), async_: None, ..Default::default() }))
                     .unwrap_or(false),
                 None => true,
             };
@@ -143,7 +143,7 @@ impl Engine {
         let key_val = match b.key.as_deref() {
             Some(k) => self
                 .compile(k)
-                .and_then(|x| x.eval_key(Vars { event: Some(evt_json), async_: None }))
+                .and_then(|x| x.eval_key(Vars { event: Some(evt_json), async_: None, ..Default::default() }))
                 .unwrap_or_else(|_| "<invalid>".into()),
             None => "default".into(),
         };
