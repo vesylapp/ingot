@@ -1,0 +1,23 @@
+README.md
+  s_a583e1874b9528::t_db3e2109ab28c2 210-214
+Cargo.toml
+  s_a583e1874b9528::t_4af8e3831b6dab 34
+Cargo.lock
+  s_a583e1874b9528::t_587a97e0a823af 2938,2948,3776-3793
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "41ef640fea1b8e362d1cb1f5b7d95629dbb2edf6",
+  "prompts": {},
+  "sessions": {
+    "s_a583e1874b9528": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4d295db-1980-4d8e-9b4d-8b18998c52f9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ben Wyrosdick <ben.wyrosdick@gmail.com>"
+    }
+  }
+}
