@@ -1,0 +1,26 @@
+README.md
+  s_abbeb6b9d1c57d::t_4998be8719ec95 36-38
+.github/workflows/docker.yml
+  s_abbeb6b9d1c57d::t_a019ef3a40b9d2 8-9
+  s_abbeb6b9d1c57d::t_0fe4588a768b29 179-183
+  s_abbeb6b9d1c57d::t_0b0c2f8e2c004a 7
+  s_abbeb6b9d1c57d::t_be3532ddb6b9e0 176-178
+  s_abbeb6b9d1c57d::t_40594789d875bf 184-186
+  s_abbeb6b9d1c57d::t_f35007cd31c601 155-175,187-207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7083fbe9928667eb3c630a78bca46e21679ecb69",
+  "prompts": {},
+  "sessions": {
+    "s_abbeb6b9d1c57d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5744e38a-0aa1-49d9-9c51-343241f9e4b0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Chris Sturgill <chris@thesturgills.com>"
+    }
+  }
+}
