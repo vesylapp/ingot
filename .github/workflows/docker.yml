@@ -4,6 +4,9 @@
 #   push to main  -> :main, :latest, :sha-<short>
 #   tag v1.2.3    -> :1.2.3, :1.2, :1, :sha-<short>
 #   pull request  -> build and smoke-test only, nothing pushed
+#
+# Version tags are also copied to VESYL's per-environment Artifact Registry repos; the
+# <ENV>_* repo variables come from the monorepo's `ingot_ci_push` Terraform output.
 name: docker
 
 on:
@@ -149,3 +152,56 @@ jobs:
 
       - name: Inspect
         run: docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"
+
+  registry:
+    name: registry (${{ matrix.environment }})
+    needs: merge
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: staging
+            prefix: STAGING
+          - environment: production
+            prefix: PRODUCTION
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    env:
+      SOURCE: ghcr.io/${{ github.repository }}
+      TARGET: ${{ vars[format('{0}_IMAGE_REPOSITORY', matrix.prefix)] }}/ingot
+    steps:
+      - name: Image names
+        run: |
+          {
+            echo "SOURCE=${SOURCE,,}"
+            echo "VERSION=${GITHUB_REF_NAME#v}"
+            echo "REGISTRY=${TARGET%%/*}"
+          } >> "$GITHUB_ENV"
+
+      - id: gcp
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars[format('{0}_GCP_WORKLOAD_IDENTITY_PROVIDER', matrix.prefix)] }}
+          service_account: ${{ vars[format('{0}_GCP_SERVICE_ACCOUNT', matrix.prefix)] }}
+          token_format: access_token
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: oauth2accesstoken
+          password: ${{ steps.gcp.outputs.access_token }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Copy the release
+        run: docker buildx imagetools create -t "$TARGET:$VERSION" "$SOURCE:$VERSION"

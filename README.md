@@ -33,7 +33,9 @@ Multi-arch images (linux/amd64, linux/arm64) are published to GitHub Container R
 To release, run `just bump` (patch), `just bump --minor` or `just bump --major` on a clean
 `main`. It updates the version in `Cargo.toml` (zeroing the lower parts on a minor or major
 bump, so 0.1.13 → 0.2.0), builds, commits, then pushes the commit and a `vX.Y.Z` tag, which
-publishes the versioned image.
+publishes the versioned image. The same tag copies the release to VESYL's staging and production
+Artifact Registry repos, which the GKE clusters pull from; deploying it is a separate tag bump in
+the monorepo's Terraform.
 
 ```sh
 docker run -p 8288:8288 -v ingot-data:/data ghcr.io/benwyrosdick/ingot:latest \
